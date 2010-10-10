@@ -1,2 +1,7 @@
-hello
-newline
+# Start project gingko
+# gingko is a point to point rolling checksum protocol to
+# synchronize files from a large mesh computer network so-
+# -called cloud, we want to make it a cloud sync applicat-
+# ion pushing files from computers to computers
+# Hope it success!
+EOF
