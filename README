@@ -13,4 +13,5 @@
 # the P2P protocol will make it more efficient.
 # Hope it success!
 
+#define Rolling_checksum_algorithm http://samba.anu.edu.au/rsync/tech_report/node3.html
 -EOF-                                 
