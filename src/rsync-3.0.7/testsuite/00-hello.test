@@ -1,5 +1,0 @@
-#! /bin/sh
-
-echo $0 running
-
-$RSYNC --version || exit 1
