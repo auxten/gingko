@@ -1,0 +1,17 @@
+  ____ _          ____ _         
+ / ___(_)_ __    / ___| | _____  
+| |  _| | '_ \  | |  _| |/ / _ \ 
+| |_| | | | | | | |_| |   < (_) |
+ \_wpc|_|_| |_|  \__xq|_|\_\___/ 
+
+# Start project gingko
+# Gingko is a point to point rsync rolling checksum proto-
+# col implemented file synchronize application. Instead
+# of original rsync builds, we want to make it able to 
+# sync files from a large mesh computer network so-called 
+# the cloud and pushing files from computers to computers,
+# the P2P protocol will make it more efficient.
+# Hope it success!
+
+#define Rolling_checksum_algorithm http://samba.anu.edu.au/rsync/tech_report/node3.html
+-EOF-                                 

@@ -1,0 +1,17 @@
+线程池可以扩大
+线程缓冲区做成缓冲池
+# client的ip以及port   getpeername inet_ntoa
+# zero file core
+# sendfile BSD linux不太相同 可以考虑采用mmap ＋ write See: http://blog.sina.com.cn/s/blog_4967ea190100ja5p.html
+# find port to listen
+strerror strerror_r必要？
+# 跨文件的数据块校验失败
+libevent读文件event_init event_base_del效率低 也许select更好 增大块大小可以缓解
+# 多线程fnv_hash
+# shutdown socket
+socket 超时
+# 最后请求server
+vnode 使用线程
+sendblock broken pipe 死锁
+限速
+＃ not ready_to_serv host set保存host

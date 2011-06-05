@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<VariablesStackState
+   version = "1.0">
+   <StackStates>
+      <StackState
+         stackFrameDescription = "down_incharge_blocks(void*):gingko_clnt.cc">
+         <expressions>
+            <expression
+               value = "(*((job.blocks + (++j)%job.block_count)-&gt;host_set)).size()">
+            </expression>
+         </expressions>
+      </StackState>
+   </StackStates>
+</VariablesStackState>
