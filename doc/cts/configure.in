@@ -1,0 +1,38 @@
+#                                               -*- Autoconf -*-
+# Process this file with autoconf to produce a configure script.
+
+AC_PREREQ([1.68])
+AC_INIT([cts,test], [3.14], [blog.auxten.com])
+AC_CONFIG_SRCDIR([config.h.in])
+AM_CONFIG_HEADER([config.h])
+#AC_CONFIG_HEADERS([config.h])
+AM_INIT_AUTOMAKE([cts,test],3.14)
+
+
+# Checks for programs.
+AC_PROG_CXX
+AC_PROG_CC
+
+# Checks for libraries.
+# FIXME: Replace `main' with a function in `-lpthread':
+AC_SEARCH_LIBS([pthread_rwlock_init], [pthread])
+#AC_CHECK_LIB([pthread], [pthread_rwlock_init])
+# FIXME: Replace `main' with a function in `-lrt':
+AC_SEARCH_LIBS([clock_gettime], [rt])
+#AC_CHECK_LIB([rt], [clock_gettime])
+AC_PROG_RANLIB
+
+# Checks for header files.
+AC_CHECK_HEADERS([arpa/inet.h fcntl.h malloc.h netinet/in.h stdlib.h string.h sys/socket.h sys/time.h unistd.h])
+
+# Checks for typedefs, structures, and compiler characteristics.
+
+# Checks for library functions.
+AC_FUNC_MALLOC
+AC_FUNC_REALLOC
+AC_CHECK_FUNCS([gettimeofday inet_ntoa memset socket strerror])
+
+AC_CONFIG_FILES([Makefile
+                 src/Makefile
+                 test/Makefile])
+AC_OUTPUT

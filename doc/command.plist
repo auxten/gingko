@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>GET</key>
+	<dict>
+		<key>Description</key>
+		<string>client请求blocks</string>
+		<key>Command</key>
+		<string>GET block_id</string>
+		<key>Function</key>
+		<string>int get_blocks(long block_id, int job_id)</string>
+	</dict>
+	<key>QUIT</key>
+	<dict>
+		<key>Description</key>
+		<string>client退出job</string>
+		<key>Command</key>
+		<string>QUIT job_id</string>
+		<key>Function</key>
+		<string>int quit_job(int job_id)</string>
+	</dict>
+	<key>JOIN</key>
+	<dict>
+		<key>Description</key>
+		<string>client加入job</string>
+		<key>Command</key>
+		<string>JOIN uri</string>
+		<key>Function</key>
+		<string>int join_job(char * uri)</string>
+	</dict>
+</dict>
+</plist>
