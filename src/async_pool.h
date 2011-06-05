@@ -26,43 +26,43 @@
 #include "event.h"
 
 struct thread_worker {
-	int id;
-	pthread_t tid;
-	struct event_base *ev_base;
-	struct event ev_notify;
-	int notify_recv_fd;
-	int notify_send_fd;
+    int id;
+    pthread_t tid;
+    struct event_base *ev_base;
+    struct event ev_notify;
+    int notify_recv_fd;
+    int notify_send_fd;
 };
 
 // Connection client
 struct conn_client {
-	int id;
-	int client_fd;
-	unsigned long client_addr;
-	int client_port;
-	unsigned int conn_time;
-	func_t handle_client;
-	struct event ev_read;
-	char *read_buffer;
-	unsigned int buffer_size;
+    int id;
+    int client_fd;
+    unsigned long client_addr;
+    int client_port;
+    unsigned int conn_time;
+    func_t handle_client;
+    struct event ev_read;
+    char *read_buffer;
+    unsigned int buffer_size;
 };
 
 // Connection server struct
 struct conn_server {
-	int listen_fd;
-	struct sockaddr_in listen_addr;
-	unsigned long srv_addr;
-	int srv_port;
-	unsigned int start_time;
-	int nonblock;
-	int listen_queue_length;
-	int tcp_send_buffer_size;
-	int tcp_recv_buffer_size;
-	int send_timeout;
-	int tcp_reuse;
-	int tcp_nodelay;
-	struct event ev_accept;
-	void (* on_data_callback)(int, void *, unsigned int);
+    int listen_fd;
+    struct sockaddr_in listen_addr;
+    unsigned long srv_addr;
+    int srv_port;
+    unsigned int start_time;
+    int nonblock;
+    int listen_queue_length;
+    int tcp_send_buffer_size;
+    int tcp_recv_buffer_size;
+    int send_timeout;
+    int tcp_reuse;
+    int tcp_nodelay;
+    struct event ev_accept;
+    void (* on_data_callback)(int, void *, unsigned int);
 };
 
 int conn_client_list_init();

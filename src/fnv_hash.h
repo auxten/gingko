@@ -16,13 +16,13 @@ typedef struct {
 } fnv_thread_arg;
 
 inline unsigned fnv_hash(void *key, int len, unsigned h) {
-	unsigned char *p = (unsigned char *) key;
-	h = h ? h : 2166136261;
+    unsigned char *p = (unsigned char *) key;
+    h = h ? h : 2166136261;
 
-	for (int i = 0; i < len; i++)
-		h = (h * 16777619) ^ p[i];
+    for (int i = 0; i < len; i++)
+        h = (h * 16777619) ^ p[i];
 
-	return h;
+    return h;
 }
 
 void * fnv_hash_all(s_job * p, long blk_count);

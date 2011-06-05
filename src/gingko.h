@@ -69,7 +69,6 @@ using namespace std;
 #define MSG_LEN                   	(MAX_URI + IP_LEN + 32 + MAX_LONG_INT * 2)
 #define SHORT_MSG_LEN				(4 + 1 + IP_LEN + 1 + 5 + 1) //"NEWW 255.255.255.255 65535"
 #define SERV_TRANS_TIME_PLUS		10000000 // 10s
-
 #define JOIN_ERR                    1
 #define MK_DIR_SYMLINK_ERR          2
 #define DOWNLOAD_ERR                3
@@ -77,7 +76,6 @@ using namespace std;
 //job state
 #define INITING						1  		//initializing
 #define	INITED						2		//initialized
-
 //lock state
 #define LK_USING					1
 #define LK_FREE						0
@@ -127,126 +125,128 @@ void * g_none_c(void *, int);
 
 #pragma pack (4)
 typedef struct _s_file {
-	struct stat f_stat;
-	mode_t mode;
-	int64_t size; // -1 for dir, -2 for symbol link
-	char sympath[MAX_PATH_LEN];
-	char name[MAX_PATH_LEN];
-	unsigned char md5[16];
-	unsigned char sha1[20];
+    struct stat f_stat;
+    mode_t mode;
+    int64_t size; // -1 for dir, -2 for symbol link
+    char sympath[MAX_PATH_LEN];
+    char name[MAX_PATH_LEN];
+    unsigned char md5[16];
+    unsigned char sha1[20];
 } s_file;
 
 typedef struct _s_host {
-	char addr[IP_LEN];
-	unsigned int port;
+    char addr[IP_LEN];
+    unsigned int port;
 } s_host;
 
 typedef struct _s_block {
-	int64_t size;
-	int64_t start_off;
-	int64_t start_f;
-	int done;
-	unsigned char md5[16];
-	unsigned int digest;
-	set<s_host> * host_set; //lock here
+    int64_t size;
+    int64_t start_off;
+    int64_t start_f;
+    int done;
+    unsigned char md5[16];
+    unsigned int digest;
+    set<s_host> * host_set; //lock here
 } s_block;
 
 typedef struct _s_job {
-	int host_num;
-	int lock_id;
-	char uri[MAX_URI];
-	char path[MAX_PATH_LEN];
-	s_file * files;
-	int64_t files_size;
-	s_block * blocks;
-	int64_t blocks_size;
-	set<s_host> * host_set; //lock here
-	int64_t file_count;
-	int64_t block_count;
+    int host_num;
+    int lock_id;
+    char uri[MAX_URI];
+    char path[MAX_PATH_LEN];
+    s_file * files;
+    int64_t files_size;
+    s_block * blocks;
+    int64_t blocks_size;
+    set<s_host> * host_set; //lock here
+    int64_t file_count;
+    int64_t block_count;
 } s_job;
 
 typedef struct _s_write_arg {
-	int sent;
-	int send_counter;
-	int flag;
-	int sz;
-	char * p;
-	struct event_base *ev_base;
-	struct event ev_write;
+    int sent;
+    int send_counter;
+    int flag;
+    int sz;
+    char * p;
+    struct event_base *ev_base;
+    struct event ev_write;
 } s_write_arg;
 
 typedef struct _s_sendfile_arg {
-	int64_t sent;
-	u_int64_t send_counter;
-	int in_fd;
-	off_t offset;
-	u_int64_t count;
-	struct event_base *ev_base;
-	struct event ev_write;
+    int64_t sent;
+    u_int64_t send_counter;
+    int in_fd;
+    off_t offset;
+    u_int64_t count;
+    struct event_base *ev_base;
+    struct event ev_write;
 } s_gsendfile_arg;
 
 typedef struct _s_host_hash_result {
-	int64_t v_node[VNODE_NUM];
-	int64_t length[VNODE_NUM];
+    int64_t v_node[VNODE_NUM];
+    int64_t length[VNODE_NUM];
 } host_hash_result;
 
 typedef struct _s_dir {
-	int file_count;
-	int init_s_file_iter;
-	s_file * files;
-	s_block * blocks;
-	long init_s_block_iter;
-	long total_size;
-	long tmp_size;
-	long last_init_block;
+    int file_count;
+    int init_s_file_iter;
+    s_file * files;
+    s_block * blocks;
+    long init_s_block_iter;
+    long total_size;
+    long tmp_size;
+    long last_init_block;
 } s_dir;
 
 typedef struct _s_lock {
-	char state;
-	pthread_rwlock_t lock;
+    char state;
+    pthread_rwlock_t lock;
 } s_lock;
 
 #pragma pack ()
 
 inline int64_t next_f(s_job * jo, int64_t file) {
-	do {
-		file = (1 + file) % (jo->file_count);
-	} while (((jo->files) + file)->size <= 0);
-	return file;
+    do {
+        file = (1 + file) % (jo->file_count);
+    } while (((jo->files) + file)->size <= 0);
+    return file;
 }
 
 inline int64_t next_b(s_job * jo, int64_t block) {
-	return (++block) % (jo->block_count);
+    return (++block) % (jo->block_count);
 }
 
 inline int64_t prev_b(s_job * jo, int64_t block) {
-	return (block ? block - 1 : jo->block_count - 1);
+    return (block ? block - 1 : jo->block_count - 1);
 }
 
 inline u_int64_t host_distance(const s_host * h1, const s_host * h2) {
-	return ((((u_int64_t) ntohl(inet_addr(h1->addr))) << 16)
-			+ (u_int64_t) h1->port)
-			^ ((((u_int64_t) ntohl(inet_addr(h2->addr))) << 16)
-					+ (u_int64_t) h2->port);
+    return ((((u_int64_t) ntohl(inet_addr(h1->addr))) << 16)
+            + (u_int64_t) h1->port)
+            ^ ((((u_int64_t) ntohl(inet_addr(h2->addr))) << 16)
+                    + (u_int64_t) h2->port);
 }
 
 void perr(const char *fmt, ...);
 int list_file(const char *name, const struct stat *status, int type,
-		struct FTW * ftw_info);
+        struct FTW * ftw_info);
 int file_counter(const char *name, const struct stat *status, int type,
-		struct FTW * ftw_info);
+        struct FTW * ftw_info);
 int recurse_dir(s_job *);
 int sendall(int, const void *, int sz, int flag);
 int sep_arg(char * inputstring, char * arg_array[], int max);
 int parse_req(char *req);
 int connect_host(s_host * h, int recv_sec, int send_sec);
 int close_socket(int sock);
-host_hash_result * host_hash(s_job * jo, const s_host * new_host, host_hash_result * result);
+host_hash_result * host_hash(s_job * jo, const s_host * new_host,
+        host_hash_result * result);
 int sendblocks(int out_fd, s_job * jo, int64_t start, int64_t num);
 int writeblock(s_job * jo, const unsigned char * buf, s_block * blk);
 int digest_ok(void * buf, s_block * b);
 void conn_send_data(int fd, void *str, unsigned int len);
-int64_t getblock(s_host * ds, int64_t num, int64_t count, unsigned char flag, char * buf);
+int64_t getblock(s_host * ds, int64_t num, int64_t count, unsigned char flag,
+        char * buf);
 int broadcast_join(s_host * host_array, s_host *h);
 int sendcmd(s_host *h, const char * cmd);
 

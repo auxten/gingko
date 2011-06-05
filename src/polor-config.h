@@ -36,13 +36,13 @@
 /*
  * Uncomment if native integers are 8-bit wide.
  *
-#define POLARSSL_HAVE_INT8
+ #define POLARSSL_HAVE_INT8
  */
 
 /*
  * Uncomment if native integers are 16-bit wide.
  *
-#define POLARSSL_HAVE_INT16
+ #define POLARSSL_HAVE_INT16
  */
 
 /*
@@ -70,7 +70,6 @@
  */
 #define POLARSSL_HAVE_SSE2
 
-
 /*
  * Enable all SSL/TLS debugging messages.
  */
@@ -94,7 +93,7 @@
 /*
  * Uncomment this macro to store the AES tables in ROM.
  *
-#define POLARSSL_AES_ROM_TABLES
+ #define POLARSSL_AES_ROM_TABLES
  */
 
 /*
@@ -202,7 +201,7 @@
  *
  * Uncomment to enable support for (rare) MD2-signed X.509 certs.
  *
-#define POLARSSL_MD2_C
+ #define POLARSSL_MD2_C
  */
 
 /*
@@ -211,7 +210,7 @@
  *
  * Uncomment to enable support for (rare) MD4-signed X.509 certs.
  *
-#define POLARSSL_MD4_C
+ #define POLARSSL_MD4_C
  */
 
 /*
