@@ -142,70 +142,58 @@ int close_socket(int sock) {
 }
 
 /*
- * do_limitrate copied from kfp
+ * bwlimit modified from scp
  */
-int do_limitrate(int size, int limitrate) {
-    static struct timeval last_tv;
-    struct timeval new_tv;
-    int64_t diff;
-    if (size == 0) {
-        gettimeofday(&last_tv, NULL);
-        return 0;
-    }
-    gettimeofday(&new_tv, NULL);
-    if (new_tv.tv_usec < last_tv.tv_usec + 1000000 && size >= limitrate * 1024
-            * 1024) {
-        diff = last_tv.tv_usec + 1000000 - new_tv.tv_usec;
-        usleep(diff);
-        gettimeofday(&last_tv, NULL);
-        return 1;
-    } else if (new_tv.tv_usec > last_tv.tv_usec + 1000000) {
-        gettimeofday(&last_tv, NULL);
-    }
-    return 0;
-}
-
-void bwlimit(int amount) {
-    static struct timeval bwstart, bwend;
-    static int lamt, thresh = 16384;
+void bw_down_limit(int amount) {
+    static struct timeval bw_down_start, bw_down_end;
+    static int down_lamt, down_thresh = 16384;
     u_int64_t waitlen;
     struct timespec ts, rm;
-
-    if (!timerisset(&bwstart)) {
-        gettimeofday(&bwstart, NULL);
+    extern pthread_mutex_t bw_down_mutex;
+    if (amount <= 0) {
+        return;
+    }
+    pthread_mutex_lock(&bw_down_mutex);
+    if (!timerisset(&bw_down_start)) {
+        gettimeofday(&bw_down_start, NULL);
+        pthread_mutex_unlock(&bw_down_mutex);
         return;
     }
 
-    lamt += amount;
-    if (lamt < thresh)
+    down_lamt += amount;
+    if (down_lamt < down_thresh) {
+        pthread_mutex_unlock(&bw_down_mutex);
         return;
+    }
 
-    gettimeofday(&bwend, NULL);
-    timersub(&bwend, &bwstart, &bwend);
-    if (!timerisset(&bwend))
+    gettimeofday(&bw_down_end, NULL);
+    timersub(&bw_down_end, &bw_down_start, &bw_down_end);
+    if (!timerisset(&bw_down_end)) {
+        pthread_mutex_unlock(&bw_down_mutex);
         return;
+    }
 
-    lamt *= 8;
-    waitlen = (double) 1000000L * lamt / limit_rate;
+    waitlen = (double) 1000000L * down_lamt / LIMIT_DOWN_RATE;
 
-    bwstart.tv_sec = waitlen / 1000000L;
-    bwstart.tv_usec = waitlen % 1000000L;
+    bw_down_start.tv_sec = waitlen / 1000000L;
+    bw_down_start.tv_usec = waitlen % 1000000L;
 
-    if (timercmp(&bwstart, &bwend, >)) {
-        timersub(&bwstart, &bwend, &bwend);
+    if (timercmp(&bw_down_start, &bw_down_end, >)) {
+        timersub(&bw_down_start, &bw_down_end, &bw_down_end);
 
         /* Adjust the wait time */
-        if (bwend.tv_sec) {
-            thresh /= 2;
-            if (thresh < 2048)
-                thresh = 2048;
-        } else if (bwend.tv_usec < 100) {
-            thresh *= 2;
-            if (thresh > 32768)
-                thresh = 32768;
+        if (bw_down_end.tv_sec) {
+            down_thresh /= 2;
+            if (down_thresh < 2048)
+                down_thresh = 2048;
+        } else if (bw_down_end.tv_usec < 100) {
+            down_thresh *= 2;
+            if (down_thresh > 32768)
+                down_thresh = 32768;
         }
 
-        TIMEVAL_TO_TIMESPEC(&bwend, &ts);
+        TIMEVAL_TO_TIMESPEC(&bw_down_end, &ts);
+        fprintf(stderr, "sleep for: %d usec\n", (&bw_down_end)->tv_usec);
         while (nanosleep(&ts, &rm) == -1) {
             if (errno != EINTR)
                 break;
@@ -213,8 +201,73 @@ void bwlimit(int amount) {
         }
     }
 
-    lamt = 0;
-    gettimeofday(&bwstart, NULL);
+    down_lamt = 0;
+    gettimeofday(&bw_down_start, NULL);
+    pthread_mutex_unlock(&bw_down_mutex);
+    return;
+}
+
+void bw_up_limit(int amount) {
+    static struct timeval bw_up_start, bw_up_end;
+    static int up_lamt, up_thresh = 16384;
+    u_int64_t waitlen;
+    struct timespec ts, rm;
+    extern pthread_mutex_t bw_up_mutex;
+    if (amount <= 0) {
+        return;
+    }
+    pthread_mutex_lock(&bw_up_mutex);
+    if (!timerisset(&bw_up_start)) {
+        gettimeofday(&bw_up_start, NULL);
+        pthread_mutex_unlock(&bw_up_mutex);
+        return;
+    }
+
+    up_lamt += amount;
+    if (up_lamt < up_thresh) {
+        pthread_mutex_unlock(&bw_up_mutex);
+        return;
+    }
+
+    gettimeofday(&bw_up_end, NULL);
+    timersub(&bw_up_end, &bw_up_start, &bw_up_end);
+    if (!timerisset(&bw_up_end)) {
+        pthread_mutex_unlock(&bw_up_mutex);
+        return;
+    }
+
+    waitlen = (double) 1000000L * up_lamt / LIMIT_UP_RATE;
+
+    bw_up_start.tv_sec = waitlen / 1000000L;
+    bw_up_start.tv_usec = waitlen % 1000000L;
+
+    if (timercmp(&bw_up_start, &bw_up_end, >)) {
+        timersub(&bw_up_start, &bw_up_end, &bw_up_end);
+
+        /* Adjust the wait time */
+        if (bw_up_end.tv_sec) {
+            up_thresh /= 2;
+            if (up_thresh < 2048)
+                up_thresh = 2048;
+        } else if (bw_up_end.tv_usec < 100) {
+            up_thresh *= 2;
+            if (up_thresh > 32768)
+                up_thresh = 32768;
+        }
+
+        TIMEVAL_TO_TIMESPEC(&bw_up_end, &ts);
+        fprintf(stderr, "sleep for: %d usec\n", (&bw_up_end)->tv_usec);
+        while (nanosleep(&ts, &rm) == -1) {
+            if (errno != EINTR)
+                break;
+            ts = rm;
+        }
+    }
+
+    up_lamt = 0;
+    gettimeofday(&bw_up_start, NULL);
+    pthread_mutex_unlock(&bw_up_mutex);
+    return;
 }
 
 /*
@@ -256,6 +309,7 @@ void ev_fn_gsendfile(int fd, short ev, void *arg) {
         if (a->sent == -1) {
             perror("send error\n");
         }
+        bw_up_limit(a->sent);
         //printf("sentfile: %d\n", a->sent);
         if ((a->send_counter = (a->sent > 0 ? a->sent : 0) + a->send_counter)
                 == a->count) {

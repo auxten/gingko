@@ -49,13 +49,16 @@
 
 using namespace std;
 
-/************** MUTEX & LOCK **************/
+/************** PTHREAD STUFF **************/
 //server wide lock
 pthread_rwlock_t grand_lock;
 //job specific lock
 s_lock job_lock[MAX_JOBS];
 pthread_key_t dir_key;
-/************** MUTEX & LOCK **************/
+//mutex for bandwidth limit
+pthread_mutex_t bw_up_mutex;
+pthread_mutex_t bw_down_mutex;
+/************** PTHREAD STUFF **************/
 
 /************** FUNC DICT **************/
 #include "gingko_common.h"
@@ -175,6 +178,8 @@ int base_init() {
 static inline int pthread_init() {
     pthread_key_create(&dir_key, NULL);
     pthread_rwlock_init(&grand_lock, NULL);
+    pthread_mutex_init(&bw_up_mutex, NULL);
+    pthread_mutex_init(&bw_down_mutex, NULL);
     for (int i = 0; i < MAX_JOBS; i++) {
         job_lock[i].state = LK_FREE;
         pthread_rwlock_init(&(job_lock[i].lock), NULL);
@@ -186,6 +191,8 @@ static inline int pthread_clean() {
     for (int i = 0; i < MAX_JOBS; i++) {
         pthread_rwlock_destroy(&(job_lock[i].lock));
     }
+    pthread_mutex_destroy(&bw_up_mutex);
+    pthread_mutex_destroy(&bw_down_mutex);
     pthread_rwlock_destroy(&grand_lock);
     pthread_key_delete(dir_key);
     return 0;

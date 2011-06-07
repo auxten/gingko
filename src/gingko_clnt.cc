@@ -43,15 +43,18 @@
 #include "path.h"
 #include "route.h"
 
-/************** MUTEX & LOCK **************/
+/************** PTHREAD STUFF **************/
+pthread_attr_t attr;
 //client wide lock
 pthread_rwlock_t clnt_lock;
 //block host set lock
 pthread_rwlock_t blk_hostset_lock;
 //mutex for hosts_noready
 pthread_mutex_t noready_mutex;
-/************** MUTEX & LOCK **************/
-pthread_attr_t attr;
+//mutex for bandwidth limit
+pthread_mutex_t bw_up_mutex;
+pthread_mutex_t bw_down_mutex;
+/************** PTHREAD STUFF **************/
 
 /************** FUNC DICT **************/
 #include "gingko_common.h"
@@ -139,6 +142,7 @@ int64_t getblock(s_host * dhost, int64_t num, int64_t count,
         unsigned char flag, char * buf) {
     int sock;
     int64_t i, j;
+    ssize_t conuter;
     char msg[MSG_LEN];
     char * arg_array[4];
     sock = connect_host(dhost, RCV_TIMEOUT, SND_TIMEOUT);
@@ -170,8 +174,8 @@ int64_t getblock(s_host * dhost, int64_t num, int64_t count,
     s_block * b;
     for (i = 0; i < n_to_recv; i++) {
         b = job.blocks + (num + i) % job.block_count;
-        j = recv(sock, buf, b->size, MSG_WAITALL);
-        //fprintf(stderr, "%d gotfile: %d ", i, j);
+        conuter = recv(sock, buf, b->size, MSG_WAITALL);
+        fprintf(stderr, "%d gotfile: %d \n", i, conuter);
         //fprintf(stderr, "buf: %s \n", buf);// test digest err
         //        if (i == 0) {
         //        	*buf += 1;
@@ -190,6 +194,7 @@ int64_t getblock(s_host * dhost, int64_t num, int64_t count,
             break;
         }
         //usleep(100);
+        bw_down_limit(conuter);
     }
     close_socket(sock);
     return i;
@@ -508,8 +513,7 @@ int vnode_download(s_job * jo, int64_t blk_num, int64_t blk_count) {
         for (vector<s_host>::iterator iter = h_vec.begin(); iter != h_vec.end(); iter++) {
             printf("#####host in vec:%s %d\n", iter->addr, iter->port);
         }
-        i
-                = decide_src(jo, 3, (blk_num + blk_got) % jo->block_count,
+        i = decide_src(jo, 3, (blk_num + blk_got) % jo->block_count,
                         &h_vec, &h);
         if (i <= 0) {
             retry++;
@@ -643,6 +647,8 @@ static inline int pthread_init() {
     pthread_rwlock_init(&clnt_lock, NULL);
     pthread_rwlock_init(&blk_hostset_lock, NULL);
     pthread_mutex_init(&noready_mutex, NULL);
+    pthread_mutex_init(&bw_up_mutex, NULL);
+    pthread_mutex_init(&bw_down_mutex, NULL);
     return 0;
 }
 
@@ -651,6 +657,8 @@ static inline int pthread_clean() {
     pthread_rwlock_destroy(&clnt_lock);
     pthread_rwlock_destroy(&blk_hostset_lock);
     pthread_mutex_destroy(&noready_mutex);
+    pthread_mutex_destroy(&bw_up_mutex);
+    pthread_mutex_destroy(&bw_down_mutex);
     return 0;
 }
 

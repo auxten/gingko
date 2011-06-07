@@ -55,6 +55,8 @@ using namespace std;
 #define SEND_RETRY_INTERVAL         100     // microseconds
 #define RCV_TIMEOUT					10		//  seconds
 #define SND_TIMEOUT					5		//  seconds
+#define LIMIT_UP_RATE               (1000 * 1024 * 1024) //bytes per second
+#define LIMIT_DOWN_RATE             (1 * 1024 * 1024) //bytes per second
 #define BUF_SIZ                     255     // message buffer size
 #define VNODE_NUM                   3       // every physical node have VNODE_NUM vnodes
 #define CMD_COUNT					6       // to sizeof an extern array we must define it
@@ -239,6 +241,8 @@ int sep_arg(char * inputstring, char * arg_array[], int max);
 int parse_req(char *req);
 int connect_host(s_host * h, int recv_sec, int send_sec);
 int close_socket(int sock);
+void bw_down_limit(int amount);
+void bw_up_limit(int amount);
 host_hash_result * host_hash(s_job * jo, const s_host * new_host,
         host_hash_result * result);
 int sendblocks(int out_fd, s_job * jo, int64_t start, int64_t num);

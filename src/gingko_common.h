@@ -197,9 +197,9 @@ void * join_job_s(void * uri, int fd) {
         perror("sending host_set error!");
     }
     broadcast_join(host_array, &h);
-    perror("^^^^^^^^^^before free");
+//    perror("^^^^^^^^^^before free");
     free(host_array);
-    perror("^^^^^^^^^^after free");
+//    perror("^^^^^^^^^^after free");
 #else
     extern s_job job;
     memset(&job, 0, sizeof(s_job));
