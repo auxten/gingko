@@ -494,7 +494,11 @@ int mk_dir_softlink(void *) {
     return 0;
 }
 
-int vnode_download(s_job * jo, int64_t blk_num, int64_t blk_count) {
+void * vnode_download(void * arg) {
+    s_vnode_download_arg *p = (s_vnode_download_arg *) arg;
+    s_job * jo = p->jo;
+    int64_t blk_num = p->blk_num;
+    int64_t blk_count = p->blk_count;
     vector<s_host> h_vec;
     s_host h;
     int64_t i, tmp, blk_got = 0;
@@ -505,7 +509,7 @@ int vnode_download(s_job * jo, int64_t blk_num, int64_t blk_count) {
      */
     if ((buf = (char *) malloc(BLOCK_SIZE)) == NULL) {
         perr("malloc for read buf of blocks_size failed");
-        return -1;
+        return (void *)-1;
     }
     while (blk_got < blk_count && retry <= MAX_RETRY) {
         i = get_blk_src(jo, 3, (blk_num + blk_got) % jo->block_count, &h_vec);
@@ -554,12 +558,14 @@ int vnode_download(s_job * jo, int64_t blk_num, int64_t blk_count) {
     }
     free(buf);
     if (retry > MAX_RETRY) {
-        return -1;
+        return (void *)-1;
     }
-    return 0;
+    return (void *)0;
 }
 
 int node_download(void *) {
+    pthread_t vnode_pthread[VNODE_NUM];
+    void *status;
     if (!job.block_count) {
         return 0;
     }
@@ -576,8 +582,7 @@ int node_download(void *) {
         h_hash.length[i] = 1;
         // go back until we find the node has the_host
         while (!((job.blocks + (j + 1) % job.block_count)->host_set)
-                || (*((job.blocks + (j + 1) % job.block_count)->host_set)).find(
-                        the_host)
+                || (*((job.blocks + (j + 1) % job.block_count)->host_set)).find(the_host)
                         == (*((job.blocks + (j + 1) % job.block_count)->host_set)).end()) {
 
             //printf("j: %lld\n", j%job.block_count);
@@ -587,8 +592,19 @@ int node_download(void *) {
         printf("vnode%d: %lld, length: %lld\n", i, h_hash.v_node[i],
                 h_hash.length[i]);
     }
+    s_vnode_download_arg vnode_arg[VNODE_NUM];
     for (int i = 0; i < VNODE_NUM; i++) {
-        if (vnode_download(&job, h_hash.v_node[i], h_hash.length[i]) < 0) {
+        vnode_arg[i].jo = &job;
+        vnode_arg[i].blk_num = h_hash.v_node[i];
+        vnode_arg[i].blk_count = h_hash.length[i];
+    }
+
+    for (int i = 0; i < VNODE_NUM; i++) {
+        pthread_create(&vnode_pthread[i], &attr, vnode_download, &vnode_arg[i]);
+    }
+    for (int i = 0; i < VNODE_NUM; i++) {
+        pthread_join(vnode_pthread[i], &status);
+        if (status != (void *)0) {
             exit(DOWNLOAD_ERR);
         }
     }

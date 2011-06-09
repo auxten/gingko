@@ -55,8 +55,8 @@ using namespace std;
 #define SEND_RETRY_INTERVAL         100     // microseconds
 #define RCV_TIMEOUT					10		//  seconds
 #define SND_TIMEOUT					5		//  seconds
-#define LIMIT_UP_RATE               (1000 * 1024 * 1024) //bytes per second
-#define LIMIT_DOWN_RATE             (1 * 1024 * 1024) //bytes per second
+#define LIMIT_UP_RATE               (10 * 1024 * 1024) //bytes per second
+#define LIMIT_DOWN_RATE             (5 * 1024 * 1024) //bytes per second
 #define BUF_SIZ                     255     // message buffer size
 #define VNODE_NUM                   3       // every physical node have VNODE_NUM vnodes
 #define CMD_COUNT					6       // to sizeof an extern array we must define it
@@ -184,6 +184,12 @@ typedef struct _s_sendfile_arg {
     struct event_base *ev_base;
     struct event ev_write;
 } s_gsendfile_arg;
+
+typedef struct _s_vnode_download_arg {
+    s_job * jo;
+    int64_t blk_num;
+    int64_t blk_count;
+} s_vnode_download_arg;
 
 typedef struct _s_host_hash_result {
     int64_t v_node[VNODE_NUM];
