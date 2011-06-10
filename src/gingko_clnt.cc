@@ -154,20 +154,21 @@ int64_t getblock(s_host * dhost, int64_t num, int64_t count,
      * send "GETT uri start num" to server
      */
     snprintf(msg, MSG_LEN, "GETT\t%s\t%lld\t%lld", job.uri, num, count);
+    //printf("sent: %s\n", msg);
     if ((j = sendall(sock, msg, MSG_LEN, 0)) < 0) {
         printf("sent: %lld\n", j);
         perror("sending GETT error!");
         return 0;
     }
-    printf("Sent: %s, Length: %ld\n", msg, strlen(msg));
+    //printf("Sent: %s, Length: %ld\n", msg, strlen(msg));
     /*
      * server will send "HAVA n"
      */
     j = recv(sock, msg, sizeof(msg), MSG_WAITALL);
-    printf("Got: %lld ##%s##\n", j, msg);
+    printf("%s:%d %s from %lld\n", dhost->addr, dhost->port, msg, num);
     sep_arg(msg, arg_array, 4);
     int64_t n_to_recv = atol(arg_array[1]);
-    printf("arg1: %lld\n", n_to_recv);
+    //printf("arg1: %lld\n", n_to_recv);
     /*
      * recv data and check the digest
      */
@@ -175,7 +176,7 @@ int64_t getblock(s_host * dhost, int64_t num, int64_t count,
     for (i = 0; i < n_to_recv; i++) {
         b = job.blocks + (num + i) % job.block_count;
         conuter = recv(sock, buf, b->size, MSG_WAITALL);
-        fprintf(stderr, "%d gotfile: %d \n", i, conuter);
+        //fprintf(stderr, "%d gotfile: %d \n", i, conuter);
         //fprintf(stderr, "buf: %s \n", buf);// test digest err
         //        if (i == 0) {
         //        	*buf += 1;
@@ -225,6 +226,7 @@ void * helo_serv_c(void * arg, int fd) {
     //connect and send the msg
     if (0 > connect(sock, (struct sockaddr *) &channel, sizeof(channel))) {
         perr("connect error\n");
+        return (void *)3;
     }
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char *) &recv_timeout,
             sizeof(struct timeval));
@@ -398,63 +400,63 @@ void * async_server(void * arg) {
     pthread_exit((void *) 0);
 }
 
-//we got ip from the previous "HELO" to the server
-void *raw_server(void *arg) {
-    char request[MAX_PACKET_LEN];
-    int fd;
-    short tmp_port;
-    int l_sock, s_sock; /* master socket and slave socket */
-    fd_set rfds, afds; /* ready fd set and active file set */
-    socklen_t len;
-    /* sin used to bind, sin_cli is the requesting client's sockaddr */
-    struct sockaddr_in sin_cli;
-    /* Fill up sin and allocate a passive socket */
-    if ((l_sock = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
-        perr("Can't allocate a socket. %s\n", strerror(errno));
-        exit(1);
-    }
-
-    tmp_port = MAX_PORT;
-    seed_addr.sin_port = htons(tmp_port);
-    while (bind(l_sock, (struct sockaddr *) &seed_addr, sizeof(seed_addr)) < 0) {
-        if (tmp_port <= MIN_PORT) {
-            perr("bind port failed ..wired!!!\n");
-            exit(1);
-        }
-        seed_addr.sin_port = htons(tmp_port--);
-        usleep(100);
-    }
-    if (listen(l_sock, REQ_QUE_LEN)) {
-        perr("listen failed\n");
-    }
-    /* Some preparetions */FD_ZERO(&afds);
-    FD_SET(l_sock, &afds);
-    while (1) {
-        memcpy((void *) &rfds, (void *) &afds, sizeof(afds));
-        if (select(MAX_SELECT_FD, &rfds, NULL, NULL, (struct timeval *) 0) < 0) {
-            perr("Select I/O Error %s\n", strerror(errno));
-            exit(1);
-        }
-        if (FD_ISSET(l_sock, &rfds)) {
-            len = sizeof(sin_cli);
-            s_sock = accept(l_sock, (struct sockaddr *) &sin_cli, &len);
-            if (s_sock < 0) {
-                perr("Accept Error %s\n", strerror(errno));
-                exit(1);
-            }
-            FD_SET(s_sock, &afds);
-        }
-        for (fd = 0; fd < MAX_SELECT_FD; fd++) {
-            if ((fd != l_sock) && FD_ISSET(fd, &rfds)) {
-                read(fd, request, MAX_PACKET_LEN);
-                //free the s_session
-                memset(request, 0, MAX_PACKET_LEN);
-                close(fd);
-                FD_CLR(fd, &afds);
-            }
-        }
-    }
-}
+////we got ip from the previous "HELO" to the server
+//void *raw_server(void *arg) {
+//    char request[MAX_PACKET_LEN];
+//    int fd;
+//    short tmp_port;
+//    int l_sock, s_sock; /* master socket and slave socket */
+//    fd_set rfds, afds; /* ready fd set and active file set */
+//    socklen_t len;
+//    /* sin used to bind, sin_cli is the requesting client's sockaddr */
+//    struct sockaddr_in sin_cli;
+//    /* Fill up sin and allocate a passive socket */
+//    if ((l_sock = socket(PF_INET, SOCK_STREAM, 0)) < 0) {
+//        perr("Can't allocate a socket.");
+//        exit(1);
+//    }
+//
+//    tmp_port = MAX_PORT;
+//    seed_addr.sin_port = htons(tmp_port);
+//    while (bind(l_sock, (struct sockaddr *) &seed_addr, sizeof(seed_addr)) < 0) {
+//        if (tmp_port <= MIN_PORT) {
+//            perr("bind port failed ..wired!!!\n");
+//            exit(1);
+//        }
+//        seed_addr.sin_port = htons(tmp_port--);
+//        usleep(100);
+//    }
+//    if (listen(l_sock, REQ_QUE_LEN)) {
+//        perr("listen failed\n");
+//    }
+//    /* Some preparetions */FD_ZERO(&afds);
+//    FD_SET(l_sock, &afds);
+//    while (1) {
+//        memcpy((void *) &rfds, (void *) &afds, sizeof(afds));
+//        if (select(MAX_SELECT_FD, &rfds, NULL, NULL, (struct timeval *) 0) < 0) {
+//            perr("Select I/O Error");
+//            exit(1);
+//        }
+//        if (FD_ISSET(l_sock, &rfds)) {
+//            len = sizeof(sin_cli);
+//            s_sock = accept(l_sock, (struct sockaddr *) &sin_cli, &len);
+//            if (s_sock < 0) {
+//                perr("Accept Error");
+//                exit(1);
+//            }
+//            FD_SET(s_sock, &afds);
+//        }
+//        for (fd = 0; fd < MAX_SELECT_FD; fd++) {
+//            if ((fd != l_sock) && FD_ISSET(fd, &rfds)) {
+//                read(fd, request, MAX_PACKET_LEN);
+//                //free the s_session
+//                memset(request, 0, MAX_PACKET_LEN);
+//                close(fd);
+//                FD_CLR(fd, &afds);
+//            }
+//        }
+//    }
+//}
 
 int mk_dir_softlink(void *) {
     s_file * tmp;
@@ -466,19 +468,19 @@ int mk_dir_softlink(void *) {
         switch (tmp->size) {
             case -1: // dir
                 if (mkdir(tmp->name, tmp->mode)) {
-                    perr("mkdir error: %s\n", strerror(errno));
+                    perr("mkdir error");
                     return -1;
                 }
                 break;
             case -2: // symbol link
                 if (symlink(tmp->sympath, tmp->name)) {
-                    perr("symlink error: %s\n", strerror(errno));
+                    perr("symlink error");
                     return -1;
                 }
                 break;
             default: //regular file
                 if (-1 == (fd = open(tmp->name, CREATE_OPEN_FLAG, tmp->mode))) {
-                    perr("mk new file error: %s\n", strerror(errno));
+                    perr("mk new file error");
                     return -1;
                 } else {
                     close(fd);
@@ -513,18 +515,22 @@ void * vnode_download(void * arg) {
     }
     while (blk_got < blk_count && retry <= MAX_RETRY) {
         i = get_blk_src(jo, 3, (blk_num + blk_got) % jo->block_count, &h_vec);
-        printf("get_blk_src %lld\n", i);
+        //printf("get_blk_src %lld\n", i);
         for (vector<s_host>::iterator iter = h_vec.begin(); iter != h_vec.end(); iter++) {
-            printf("#####host in vec:%s %d\n", iter->addr, iter->port);
+            //printf("#####host in vec:%s %d\n", iter->addr, iter->port);
         }
+        memset(&h, 0, sizeof(s_host));
         i = decide_src(jo, 3, (blk_num + blk_got) % jo->block_count,
                         &h_vec, &h);
-        if (i <= 0) {
+        if (i == 0) {
             retry++;
             perr("decide_src ret: %lld\n", i);
             sleep(retry);
         } else {
             retry = 0;
+        }
+        if (retry > MAX_RETRY) {
+            return (void *)-1;
         }
         /*
          *  if intend to getblock from the_server
@@ -554,12 +560,9 @@ void * vnode_download(void * arg) {
         } else {
             perr("getblock ret: %lld\n", tmp);
         }
-        printf("gotblock: %lld\n", tmp);
+        //printf("gotblock: %lld\n", tmp);
     }
     free(buf);
-    if (retry > MAX_RETRY) {
-        return (void *)-1;
-    }
     return (void *)0;
 }
 
@@ -604,10 +607,11 @@ int node_download(void *) {
     }
     for (int i = 0; i < VNODE_NUM; i++) {
         pthread_join(vnode_pthread[i], &status);
-        if (status != (void *)0) {
-            exit(DOWNLOAD_ERR);
-        }
+//        if (status != (void *)0) {
+//            exit(DOWNLOAD_ERR);
+//        }
     }
+
     return 0;
 }
 
@@ -678,11 +682,48 @@ static inline int pthread_clean() {
     return 0;
 }
 
+static void sig_handler(const int sig) {
+    fprintf(stderr, "\nSIGINT handled, client terminated\n");
+    // Clear all status
+    exit(-1);
+}
+
+/* Set signal handler */
+void set_sig() {
+    struct sigaction *sa =
+            (struct sigaction *) malloc(sizeof(struct sigaction));
+
+    // SIGINT
+    signal(SIGINT, sig_handler);
+    signal(SIGTERM, sig_handler);
+    signal(SIGQUIT, sig_handler);
+    signal(SIGKILL, sig_handler);
+    signal(SIGHUP, sig_handler);
+
+    /* Ignore terminal signals */
+    signal(SIGTTOU, SIG_IGN);
+    signal(SIGTTIN, SIG_IGN);
+    signal(SIGTSTP, SIG_IGN);
+
+    /* Ignore SIGPIPE & SIGCLD */
+    sa->sa_handler = SIG_IGN;
+    sa->sa_flags = 0;
+    signal(SIGPIPE, SIG_IGN);
+    signal(SIGCHLD, SIG_IGN);
+    if (sigemptyset(&sa->sa_mask) == -1 || sigaction(SIGPIPE, sa, 0) == -1) {
+        fprintf(stderr, "Ignore SIGPIPE failed\n");
+        exit(-1);
+    }
+
+    return;
+}
+
 int main(int argc, char *argv[]) {
+    set_sig();
     pthread_t download, upload;
     void *status;
     if (!(log_fp = fopen(CLIENT_LOG, "a+")))
-        fprintf(stderr, "open log for appending failed, %s\n", strerror(errno));
+        fprintf(stderr, "open log for appending failed");
 #ifdef _BSD_MACHINE_TYPES_H_
     printf("DARWIN\n");
 #else
@@ -709,7 +750,9 @@ int main(int argc, char *argv[]) {
      */
     memset(&the_host, 0, sizeof(the_host));
     the_host.port = 0;
-    serv = gethostbyname(SERVER_IP);
+    char * gethostname_buf = (char *)malloc(1024);
+    struct hostent *host_buf = (struct hostent *)malloc(sizeof(struct hostent));
+    serv = gethostname_my(SERVER_IP, host_buf,&gethostname_buf, 1024);
     if (!serv) {
         perr("gethostbyname error\n");
     }
@@ -721,6 +764,7 @@ int main(int argc, char *argv[]) {
 
     pthread_join(download, &status);
     sleep(60);
+    free(gethostname_buf);
     return 0;
     pthread_join(upload, &status);
     pthread_clean();

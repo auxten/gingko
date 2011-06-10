@@ -11,7 +11,8 @@ libevent读文件event_init event_base_del效率低 也许select更好 增大块
 # shutdown socket
 socket 超时
 # 最后请求server
-vnode 使用线程
-sendblock broken pipe 死锁
-限速
-＃ not ready_to_serv host set保存host
+# vnode 使用线程
+# sendblock broken pipe 死锁
+# 限速
+# not ready_to_serv host set保存host
+获得可用源就不再去请求server

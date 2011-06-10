@@ -43,10 +43,26 @@ extern FILE * log_fp;
 void perr(const char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    vfprintf(log_fp, fmt, args);
+    char logstr[256] = "\0";
+    gettimestr(logstr);
+    vsnprintf(logstr + strlen(logstr), sizeof(logstr)-strlen(logstr), fmt, args);
+    strerror_r(errno, logstr + strlen(logstr), sizeof(logstr)-strlen(logstr));
+    fprintf(log_fp, "%s\n", logstr);
     fflush(log_fp);
     va_end(args);
     return;
+}
+
+char * gettimestr(char * time){
+    char * tm_format = "[%Y-%m-%d %H:%M:%S]  ";
+    struct timeval tv;
+    struct tm ltime;
+    time_t curtime;
+    gettimeofday(&tv, NULL);
+    curtime=tv.tv_sec;
+    //Format time
+    strftime(time, 25, tm_format, localtime_r(&curtime, &ltime));
+    return time;
 }
 
 int sep_arg(char * inputstring, char * arg_array[], int max) {
@@ -76,6 +92,31 @@ int parse_req(char *req) {
 }
 
 /*
+ * thread safe gethostbyname
+ */
+struct hostent * gethostname_my(const char *host, struct hostent *hostbuf,
+        char ** tmphstbuf, size_t hstbuflen) {
+#ifdef _BSD_MACHINE_TYPES_H_
+    return gethostbyname(host);
+#else
+    struct hostent *hp;
+    int res;
+    int herr;
+
+    while ((res = gethostbyname_r(host, hostbuf, *tmphstbuf, hstbuflen,
+                                   &hp, &herr)) == ERANGE){
+        /* Enlarge the buffer.  */
+        hstbuflen *= 2;
+        *tmphstbuf = (char *)realloc (*tmphstbuf, hstbuflen);
+    }
+    /*  Check for errors.  */
+    if (res || hp == NULL)
+      return NULL;
+    return hp;
+#endif
+}
+
+/*
  * connect to a host
  * h: pointer to s_host
  * recv_sec: receive timeout seconds, 0 for never timeout
@@ -89,7 +130,9 @@ int connect_host(s_host * h, int recv_sec, int send_sec) {
     recv_timeout.tv_usec = 0;
     send_timeout.tv_sec = send_sec;
     send_timeout.tv_usec = 0;
-    host = gethostbyname(h->addr);
+    char * gethostname_buf = (char *)malloc(1024);
+    struct hostent host_buf;
+    host = gethostname_my(h->addr, &host_buf, &gethostname_buf, 1024);
     if (!host) {
         perr("gethostbyname %s error\n", h->addr);
         return -1;
@@ -106,20 +149,22 @@ int connect_host(s_host * h, int recv_sec, int send_sec) {
     channel.sin_port = htons(h->port);
     //connect and send the msg
     if (0 > connect(sock, (struct sockaddr *) &channel, sizeof(channel))) {
-        perr("connect error\n");
+        free(gethostname_buf);
+        perr("connect %s:%d ", h->addr, h->port);
         return -1;
     }
+    free(gethostname_buf);
     if (recv_sec) {
         if (setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char *) &recv_timeout,
                 sizeof(struct timeval))) {
-            perr("setsockopt SO_RCVTIMEO error\n");
+            perr("setsockopt SO_RCVTIMEO error");
             return -1;
         }
     }
     if (send_sec) {
         if (setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, (char *) &send_timeout,
                 sizeof(struct timeval))) {
-            perr("setsockopt SO_SNDTIMEO error\n");
+            perr("setsockopt SO_SNDTIMEO error");
             return -1;
         }
     }
@@ -135,7 +180,7 @@ int close_socket(int sock) {
     //		return -1;
     //	}
     if (close(sock)) {
-        perr("close sock error %s\n", strerror(errno));
+        perr("close sock error");
         return -1;
     }
     return 0;
@@ -193,7 +238,7 @@ void bw_down_limit(int amount) {
         }
 
         TIMEVAL_TO_TIMESPEC(&bw_down_end, &ts);
-        fprintf(stderr, "sleep for: %d usec\n", (&bw_down_end)->tv_usec);
+        //fprintf(stderr, "sleep for: %d usec\n", (&bw_down_end)->tv_usec);
         while (nanosleep(&ts, &rm) == -1) {
             if (errno != EINTR)
                 break;
@@ -256,7 +301,7 @@ void bw_up_limit(int amount) {
         }
 
         TIMEVAL_TO_TIMESPEC(&bw_up_end, &ts);
-        fprintf(stderr, "sleep for: %d usec\n", (&bw_up_end)->tv_usec);
+        //fprintf(stderr, "sleep for: %d usec\n", (&bw_up_end)->tv_usec);
         while (nanosleep(&ts, &rm) == -1) {
             if (errno != EINTR)
                 break;
@@ -302,6 +347,9 @@ void ev_fn_gsendfile(int fd, short ev, void *arg) {
     s_gsendfile_arg * a = (s_gsendfile_arg *) arg;
     off_t tmp_off = a->offset + a->send_counter;
     u_int64_t tmp_counter = a->count - a->send_counter;
+    struct timeval t;
+    t.tv_sec = 0;
+    t.tv_usec = 1;
     if (((a->sent = gsendfile(fd, a->in_fd, &tmp_off, &tmp_counter)) > 0)
             || (a->sent == -1 && errno == EAGAIN)) {
         //printf("res: %d\n",res);
@@ -315,6 +363,11 @@ void ev_fn_gsendfile(int fd, short ev, void *arg) {
                 == a->count) {
             event_del(&(a->ev_write));
         }
+        a->retry = 0;
+    }else if(errno == EPIPE){
+        if(a->retry++ > 3) {
+            event_base_loopexit(a->ev_base, &t);
+        }
     }
     return;
 }
@@ -324,6 +377,9 @@ void ev_fn_gsendfile(int fd, short ev, void *arg) {
  */
 void ev_fn_write(int fd, short ev, void *arg) {
     s_write_arg * a = (s_write_arg *) arg;
+    struct timeval t;
+    t.tv_sec = 0;
+    t.tv_usec = 1;
     if (((a->sent = send(fd, a->p + a->send_counter, a->sz - a->send_counter,
             a->flag)) > 0) || (a->sent == -1 && errno == EAGAIN)) {
         //printf("res: %d\n",res);
@@ -334,6 +390,11 @@ void ev_fn_write(int fd, short ev, void *arg) {
         //printf("sent: %d\n", a->sent);
         if ((a->send_counter = MAX(a->sent, 0) + a->send_counter) == a->sz) {
             event_del(&(a->ev_write));
+        }
+        a->retry = 0;
+    }else if(errno == EPIPE){
+        if(a->retry++ > 3) {
+            event_base_loopexit(a->ev_base, &t);
         }
     }
     return;
@@ -356,6 +417,7 @@ int sendall(int fd, const void * void_p, int sz, int flag) {
     arg.sz = sz;
     arg.p = (char *) void_p;
     arg.flag = flag;
+    arg.retry = 0;
     // FIXME event_init() and event_base_free() waste open pipe
     arg.ev_base = event_init();
 
@@ -371,7 +433,7 @@ int sendall(int fd, const void * void_p, int sz, int flag) {
     //printf("sent: %d", arg.sent);
     if (arg.sent < 0) {
         printf("errno: %d", errno);
-        perror("Socket read error\n");
+        perror("ev_fn_write error");
         return -1;
     }
     return 0;
@@ -390,6 +452,7 @@ int sendfileall(int out_fd, int in_fd, off_t *offset, u_int64_t *count) {
     arg.in_fd = in_fd;
     arg.offset = *offset;
     arg.count = *count;
+    arg.retry = 0;
     // FIXME event_init() and event_base_free() waste open pipe
     arg.ev_base = event_init();
 
@@ -404,7 +467,7 @@ int sendfileall(int out_fd, int in_fd, off_t *offset, u_int64_t *count) {
     event_base_free(arg.ev_base);
     if (arg.sent < 0) {
         printf("errno: %d", errno);
-        perror("Socket read error");
+        perror("ev_fn_gsendfile error");
         return -1;
     }
     return 0;
@@ -421,7 +484,7 @@ int digest_ok(void * buf, s_block * b) {
  * send blocks to the out_fd(usually socket)
  */
 int sendblocks(int out_fd, s_job * jo, int64_t start, int64_t num) {
-    if (num == 0) {
+    if (num <= 0) {
         return 0;
     }
     /*

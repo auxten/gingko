@@ -201,7 +201,7 @@ static inline int pthread_clean() {
 int main(int argc, char *argv[]) {
     set_sig();
     if (!(log_fp = fopen(SERVER_LOG, "a+")))
-        fprintf(stderr, "open log for appending failed, %s\n", strerror(errno));
+        fprintf(stderr, "open log for appending failed");
     //printf("%lld^^^^\n", sizeof(cmd_list));
     //printf("int:%d, int64_t:%d, int64_t:%d\n",
     //          sizeof(int), sizeof(int64_t), sizeof(int64_t));

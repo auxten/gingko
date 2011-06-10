@@ -71,7 +71,7 @@ unsigned fnv_hash_file(unsigned value, FILE * fd, off_t * off, size_t * count,
         unsigned char * buf) {
     fseeko(fd, *off, SEEK_SET);
     if (*count != fread(buf, sizeof(char), *count, fd)) {
-        perr("fread error %s\n", strerror(errno));
+        perr("fread error");
     }
     //fprintf(stderr, "#######################buf: %s\n", buf);
     return fnv_hash(buf, *count, value);

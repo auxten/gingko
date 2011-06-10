@@ -169,6 +169,7 @@ typedef struct _s_write_arg {
     int sent;
     int send_counter;
     int flag;
+    int retry;
     int sz;
     char * p;
     struct event_base *ev_base;
@@ -179,6 +180,7 @@ typedef struct _s_sendfile_arg {
     int64_t sent;
     u_int64_t send_counter;
     int in_fd;
+    int retry;
     off_t offset;
     u_int64_t count;
     struct event_base *ev_base;
@@ -237,6 +239,7 @@ inline u_int64_t host_distance(const s_host * h1, const s_host * h2) {
 }
 
 void perr(const char *fmt, ...);
+char * gettimestr(char * time);
 int list_file(const char *name, const struct stat *status, int type,
         struct FTW * ftw_info);
 int file_counter(const char *name, const struct stat *status, int type,
@@ -245,6 +248,8 @@ int recurse_dir(s_job *);
 int sendall(int, const void *, int sz, int flag);
 int sep_arg(char * inputstring, char * arg_array[], int max);
 int parse_req(char *req);
+struct hostent * gethostname_my(const char *host, struct hostent *hostbuf,
+        char ** tmphstbuf, size_t hstbuflen);
 int connect_host(s_host * h, int recv_sec, int send_sec);
 int close_socket(int sock);
 void bw_down_limit(int amount);

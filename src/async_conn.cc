@@ -65,14 +65,14 @@ int conn_tcp_server(struct conn_server *c) {
     // Bind socket
     if (bind(server->listen_fd, (struct sockaddr *) &server->listen_addr,
             sizeof(server->listen_addr)) < 0) {
-        fprintf(stderr, "Socket bind failed on port %lu:%d %s\n",
-                server->srv_addr, server->srv_port, strerror(errno));
+        perr("Socket bind failed on port %lu:%d",
+                server->srv_addr, server->srv_port);
         return -13;
     }
 
     // Listen socket
     if (listen(server->listen_fd, server->listen_queue_length) < 0) {
-        fprintf(stderr, "Socket listen failed: %s\n", strerror(errno));
+        perr("Socket listen failed");
         exit(-1);
     }
 

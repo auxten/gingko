@@ -42,7 +42,7 @@ int get_blk_src(s_job * jo, int src_max, int64_t blk_num,
     //insert the_server
     (*h_vec).push_back(the_server);
     for (vector<s_host>::iterator i = (*h_vec).begin(); i != (*h_vec).end(); i++) {
-        printf("#####host in vec: %s %d\n", i->addr, i->port);
+        //printf("#####host in vec: %s %d\n", i->addr, i->port);
     }
     // sort the src by distance, cause we just need the first src_max+1
     sort((*h_vec).begin(), (*h_vec).end(), cmpByDistance);
@@ -69,7 +69,7 @@ int decide_src(s_job * jo, int src_max, int64_t blk_num,
      */
     if ((buf = (char *) malloc(BLOCK_SIZE)) == NULL) {
         perr("malloc for read buf of blocks_size failed");
-        return -1;
+        return 0;
     }
     for (vector<s_host>::iterator i = (*h_vec).begin(); i != (*h_vec).end(); i++) {
         //if the first host in the vector is myself, pass it
@@ -82,7 +82,7 @@ int decide_src(s_job * jo, int src_max, int64_t blk_num,
         if (num == 1 && digest_ok(buf, b)) {
             //fprintf(stderr, "digest_ok\n");
             if (writeblock(jo, (unsigned char *) buf, b) < 0) {
-                return -1;
+                return 0;
             } else {
                 b->done = 1;
             }
@@ -91,7 +91,7 @@ int decide_src(s_job * jo, int src_max, int64_t blk_num,
                     + after_tv.tv_usec - before_tv.tv_usec;
         } else {
             //if get no block, make its time longest
-            fprintf(stderr, "getblock ret: %d\n", num);
+            //fprintf(stderr, "getblock ret: %d\n", num);
             tmp = MAX_INT64;
         }
         // make the_server SERV_TRANS_TIME_PLUS microseconds slower :p
@@ -99,20 +99,23 @@ int decide_src(s_job * jo, int src_max, int64_t blk_num,
             if (tmp != MAX_INT64)
                 tmp += SERV_TRANS_TIME_PLUS;
         }
-        printf("time: %lld\n", tmp);
+        //printf("time: %lld\n", tmp);
         if (diff > tmp) {
             diff = tmp;
             fastest = i;
         }
-        if (++host_i == src_max)
-            break;
+        if (++host_i == src_max) {
+            //make i point to the "the_server"
+            i = (*h_vec).end() - 2;
+            continue;
+        }
     }
     //get NO available src
     if (fastest == (*h_vec).end()) {
         return 0;
     }
     memcpy(h, &(*fastest), sizeof(s_host));
-    printf("choose %s:%d\n", h->addr, h->port);
+    //printf("choose %s:%d\n", h->addr, h->port);
     free(buf);
     return blk_i;
 }
