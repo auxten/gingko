@@ -1,9 +1,10 @@
 currently p2p algorithm is almost complete
-  ____ _          ____ _         
- / ___(_)_ __    / ___| | _____  
-| |  _| | '_ \  | |  _| |/ / _ \ 
-| |_| | | | | | | |_| |   < (_) |
- \__|_|_| |_|  \____|_|\_\___/ 
+  ____ _             _         
+ / ___(_)_ __   __ _| | _____  
+| |  _| | '_ \ / _` | |/ / _ \ 
+| |_| | | | | | (_| |   < (_) |
+ \____|_|_| |_|\__, |_|\_\___/ 
+               |___/           
 
 # Start project gingko
 # Gingko is a point to point rsync rolling checksum proto-
