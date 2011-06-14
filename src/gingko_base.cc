@@ -344,6 +344,7 @@ inline int gsendfile (int out_fd, int in_fd, off_t *offset, u_int64_t *count) {
  * event handle of sendfile
  */
 void ev_fn_gsendfile(int fd, short ev, void *arg) {
+    extern char is_server;
     s_gsendfile_arg * a = (s_gsendfile_arg *) arg;
     off_t tmp_off = a->offset + a->send_counter;
     u_int64_t tmp_counter = a->count - a->send_counter;
@@ -357,7 +358,9 @@ void ev_fn_gsendfile(int fd, short ev, void *arg) {
         if (a->sent == -1) {
             perror("send error\n");
         }
-        bw_up_limit(a->sent);
+        if (! is_server) {
+            bw_up_limit(a->sent);
+        }
         //printf("sentfile: %d\n", a->sent);
         if ((a->send_counter = (a->sent > 0 ? a->sent : 0) + a->send_counter)
                 == a->count) {

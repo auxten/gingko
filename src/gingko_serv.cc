@@ -70,6 +70,7 @@ GINGKO_OVERLOAD_S_HOST_LT
 struct event_base *ev_base;
 extern struct conn_server *server;
 
+char is_server = 1;
 FILE * log_fp;
 map<string, s_job> m_jobs;// jobs map
 

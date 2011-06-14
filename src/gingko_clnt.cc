@@ -68,9 +68,11 @@ FILE * log_fp;
 // ready_to_serv flog
 char ready_to_serv = 0;
 
+char is_server = 0;
 static struct hostent *serv;
 s_job job;
-vector<s_host> hosts_noready; //save the NEWWed host when server is not ready
+//save the NEWWed host when server is not ready
+vector<s_host> hosts_noready;
 //eclipse thought the below is incorrect, so auto complete will not work
 //s_host the_host = {addr: "\0", port: 0};
 s_host the_host, the_server;

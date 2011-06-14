@@ -59,8 +59,8 @@ int decide_src(s_job * jo, int src_max, int64_t blk_num,
     int64_t blk_i = 0;
     static struct timeval before_tv;
     struct timeval after_tv;
-    int64_t diff = MAX_INT64;
-    int64_t tmp;
+    int64_t fastest_time = MAX_INT64;
+    int64_t tmp_time;
     vector<s_host>::iterator fastest = (*h_vec).end();
     s_block * b;
     char * buf;
@@ -72,36 +72,44 @@ int decide_src(s_job * jo, int src_max, int64_t blk_num,
         return 0;
     }
     for (vector<s_host>::iterator i = (*h_vec).begin(); i != (*h_vec).end(); i++) {
-        //if the first host in the vector is myself, pass it
+        /*
+         * if the first host in the vector is myself, pass it
+         */
         if (host_distance(&the_host, &(*i)) == 0)
             continue;
+        /*
+         * do not req the server if there is already a available data src
+         */
+        if (*i == the_server) {
+            if (fastest_time != MAX_INT64) {
+                continue;
+            }
+        }
+        /*
+         * get one block and calculate the time used
+         */
         gettimeofday(&before_tv, NULL);
         num = getblock(&(*i), blk_num + blk_i, 1, 0 & ~W_DISK, buf);
         gettimeofday(&after_tv, NULL);
         b = jo->blocks + (blk_num + blk_i) % jo->block_count;
         if (num == 1 && digest_ok(buf, b)) {
-            //fprintf(stderr, "digest_ok\n");
             if (writeblock(jo, (unsigned char *) buf, b) < 0) {
                 return 0;
             } else {
                 b->done = 1;
             }
             blk_i++;
-            tmp = (after_tv.tv_sec - before_tv.tv_sec) * 1000000L
+            tmp_time = (after_tv.tv_sec - before_tv.tv_sec) * 1000000L
                     + after_tv.tv_usec - before_tv.tv_usec;
         } else {
-            //if get no block, make its time longest
-            //fprintf(stderr, "getblock ret: %d\n", num);
-            tmp = MAX_INT64;
-        }
-        // make the_server SERV_TRANS_TIME_PLUS microseconds slower :p
-        if (*i == the_server) {
-            if (tmp != MAX_INT64)
-                tmp += SERV_TRANS_TIME_PLUS;
+            /*
+             * if get no block, make its time longest
+             */
+            tmp_time = MAX_INT64;
         }
         //printf("time: %lld\n", tmp);
-        if (diff > tmp) {
-            diff = tmp;
+        if (fastest_time > tmp_time) {
+            fastest_time = tmp_time;
             fastest = i;
         }
         if (++host_i == src_max) {
