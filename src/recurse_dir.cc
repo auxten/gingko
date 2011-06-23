@@ -24,8 +24,8 @@
 #include "fnv_hash.h"
 
 /*
- *  for use of damn ftw(), we need these static...
- *  later we will use multi procesess for multi taskes
+ *  for use of damn ftw(), we need these TLS(Thread Local Stack)
+ *  global vars for every thread
  */
 extern pthread_key_t dir_key;
 

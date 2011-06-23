@@ -31,6 +31,36 @@ func_t func_list_s[CMD_COUNT] = {
 /************** FUNC DICT **************/
 
 /*
+ * event handle of sendfile
+ */
+void ev_fn_gsendfile(int fd, short ev, void *arg) {
+    s_gsendfile_arg * a = (s_gsendfile_arg *) arg;
+    off_t tmp_off = a->offset + a->send_counter;
+    u_int64_t tmp_counter = a->count - a->send_counter;
+    struct timeval t;
+    t.tv_sec = 0;
+    t.tv_usec = 1;
+    if (((a->sent = gsendfile(fd, a->in_fd, &tmp_off, &tmp_counter)) >= 0)) {
+        //printf("res: %d\n",res);
+        //printf("%s",client->read_buffer+read_counter);
+#ifdef GINGKO_CLNT
+            bw_up_limit(a->sent);
+#endif
+        //printf("sentfile: %d\n", a->sent);
+        if ((a->send_counter += a->sent) == a->count) {
+            event_del(&(a->ev_write));
+        }
+        a->retry = 0;
+    }else{
+        perror("gsendfile error");
+        if(a->retry++ > 3) {
+            event_base_loopexit(a->ev_base, &t);
+        }
+    }
+    return;
+}
+
+/*
  * handle for server replying GET
  */
 void * get_blocks_s(void * uri, int fd) {
@@ -212,6 +242,75 @@ void * join_job_s(void * uri, int fd) {
 }
 
 /*
+ * clnt,serv handle
+ * "QUIT\t%s\t%s\t%d", job.uri, quit_host->addr, quit_host->port
+ */
+void * quit_job_s(void * uri, int fd) {
+#ifdef GINGKO_SERV
+    extern map<string, s_job> m_jobs;
+    s_job *p;
+    s_host h;
+    memset(&h, 0, sizeof(h));
+    char * arg_array[4];
+    char * c_uri = (char *) uri;
+    map<string, s_job>::iterator it;
+    printf("quit_job %s\n", c_uri);
+    // req fields seperated by \t
+    sep_arg(c_uri, arg_array, 4);
+    //    for (i = 0; i < 4; i++) {
+    //        printf("%s\n", arg_array[i]);
+    //    }
+    string uri_string((char *) (arg_array[1]));
+    printf("%s\n", uri_string.c_str());
+
+    strncpy(h.addr, arg_array[2], IP_LEN);
+    h.port = atoi(arg_array[3]);
+    //pthread lock
+    //pthread_mutex_lock(&mutex_join);
+    pthread_rwlock_wrlock(&grand_lock);
+    it = m_jobs.find(uri_string);
+    if (it != m_jobs.end()) { //found the job
+        p = &(it->second);
+        pthread_rwlock_unlock(&grand_lock);
+        pthread_rwlock_wrlock(&job_lock[p->lock_id].lock);
+        (*p->host_set).erase(h);
+        p->host_num = (*p->host_set).size();
+        s_host * host_array = (s_host *) calloc(p->host_num + 1, sizeof(s_host));
+        if(! host_array) {
+            perr("calloc host_array failed %s\n", strerror(errno));
+        }
+        copy((*(p->host_set)).begin(), (*(p->host_set)).end(), host_array);
+        pthread_rwlock_unlock(&job_lock[p->lock_id].lock);
+        printf("job: %s, host_num: %d\n", p->uri, p->host_num);
+        if(p->host_num == 0) {
+            /*
+             * if the host_set is empty, del the job things
+             */
+            erase_job(uri_string);
+        } else {
+            /*
+             * broadcast QUIT
+             */
+            s_host * p_h = host_array;
+            char buf[SHORT_MSG_LEN] = {'\0'};
+            sprintf(buf, "QUIT\t%s\t%d", h.addr, h.port);
+            while (p_h->port) {
+                sendcmd(p_h, buf, 2, 2);
+                p_h++;
+            }
+        }
+        free(host_array);
+    } else { //find no job
+        pthread_rwlock_unlock(&grand_lock);
+        perr("find no job: %s", uri_string.c_str());
+    }
+#else
+    printf("quit_job\n");
+#endif /* GINGKO_SERV */
+    return (void *) 0;
+}
+
+/*
  * clnt handle "NEWW\t%s\t%d", h->addr, h->port
  */
 void * new_host_s(void * uri, int fd) {
@@ -249,7 +348,7 @@ void * new_host_s(void * uri, int fd) {
         pthread_mutex_unlock(&noready_mutex);
         fprintf(stderr, "NOT ready to serv\n");
     }
-#endif
+#endif /* GINGKO_SERV */
     return (void *) 0;
 }
 

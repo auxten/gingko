@@ -17,6 +17,11 @@ currently p2p algorithm is almost complete
 
 #define Rolling_checksum_algorithm http://samba.anu.edu.au/rsync/tech_report/node3.html
 
+NOTE：
+    For reusing some code between clnt and serv, I write some funcs in gingko_common.h
+with some MACRO, I know this is ugly, but the bins compiled out work well...so, let it
+be.
+
 auxtenwpc@gmail.com
 -EOF-                                 
 

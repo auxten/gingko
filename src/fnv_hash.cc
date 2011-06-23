@@ -17,36 +17,33 @@ unsigned fnv_hash_block(s_job * jo, long block_id, unsigned char * buf) {
     int fd;
     unsigned tmp_hash = 0;
 
-    if (-1 == (fd = open((files + ((blocks + block_id)->start_f))->name,
-            O_RDONLY | O_NOFOLLOW))) {
+    if (FAIL_CHECK(-1 == (fd = open((files + ((blocks + block_id)->start_f))->name,
+            O_RDONLY | O_NOFOLLOW)))) {
         perror("file open() error!");
     }
     memset(buf, 0, BLOCK_SIZE);
     offset = (blocks + block_id)->start_off;
     while (read_counter < (blocks + block_id)->size) {
         long tmp;
-        tmp = pread(fd, buf + read_counter,
-                (blocks + block_id)->size - read_counter, offset);
+        if (FAIL_CHECK(tmp = pread(fd, buf + read_counter,
+                (blocks + block_id)->size - read_counter, offset) == -1)) {
+            perr("pread failed");
+        }
         switch (tmp) {
-            case -1:
-                printf("fd: %d\n", fd);
-                perror("fnv_hash_block pread error");
-                exit(1);
-                break;
-
             case 0:
                 close(fd);
                 //if the next if a nonfile then next
                 file_i = next_f(jo, file_i);
-                if (-1
+                if (FAIL_CHECK(-1
                         == (fd = open(
                                 (files + ((blocks + block_id)->start_f)
-                                        + file_i)->name, O_RDONLY | O_NOFOLLOW))) {
+                                        + file_i)->name, O_RDONLY | O_NOFOLLOW)))) {
                     fprintf(
                             stderr,
                             "filename: %s\n",
                             (files + ((blocks + block_id)->start_f) + file_i)->name);
-                    perror("file open() error!");
+                    perr("filename: %s\n",
+                            (files + ((blocks + block_id)->start_f) + file_i)->name);
                 }
                 offset = 0;
                 break;
@@ -70,7 +67,7 @@ unsigned fnv_hash_block(s_job * jo, long block_id, unsigned char * buf) {
 unsigned fnv_hash_file(unsigned value, FILE * fd, off_t * off, size_t * count,
         unsigned char * buf) {
     fseeko(fd, *off, SEEK_SET);
-    if (*count != fread(buf, sizeof(char), *count, fd)) {
+    if (FAIL_CHECK(*count != fread(buf, sizeof(char), *count, fd))) {
         perr("fread error");
     }
     //fprintf(stderr, "#######################buf: %s\n", buf);
@@ -83,7 +80,7 @@ void * fnv_hash_worker_f(void * a) {
     long start = arg->range[0];
     long num = arg->range[1] - arg->range[0];
     unsigned char * buf;
-    if ((buf = (unsigned char *) calloc(BLOCK_SIZE + 1, 1)) == NULL) {
+    if (FAIL_CHECK((buf = (unsigned char *) calloc(BLOCK_SIZE + 1, 1)) == NULL)) {
         perror("calloc fuv hash buf failed");
     }
     if (num == 0) {
@@ -95,8 +92,8 @@ void * fnv_hash_worker_f(void * a) {
      */
     long sent = 0;
     long total = BLOCK_SIZE * (num - 1)
-            + (start + num >= jo->block_count ? (jo->blocks + jo->block_count
-                    - 1)->size : BLOCK_SIZE);
+                    + (start + num >= jo->block_count ? (jo->blocks + jo->block_count
+                            - 1)->size : BLOCK_SIZE);
     long b = start;
     long f = (jo->blocks + start)->start_f;
     size_t block_left = (jo->blocks + b)->size;
@@ -108,35 +105,15 @@ void * fnv_hash_worker_f(void * a) {
         if (fd == (FILE *) -1) {
             fd = fopen((jo->files + f)->name, "r");
         }
-        if (fd == NULL) {
+        if (FAIL_CHECK(fd <= 0)) {
             perror("fnv_hash_worker_f open error");
             pthread_exit((void *) -2);
         }
         file_size = (jo->files + f)->size;
         file_left = file_size - offset;
 
-        if (block_left > file_left) {
-            (jo->blocks + b)->digest = fnv_hash_file((jo->blocks + b)->digest,
-                    fd, &offset, &file_left, buf);
-            fclose(fd);
-            fd = (FILE *) -1;
-            block_left -= file_left;
-            total -= file_left;
-            sent += file_left;
-            offset = 0;
-            f = next_f(jo, f);
-        } else if (block_left == file_left) {
-            (jo->blocks + b)->digest = fnv_hash_file((jo->blocks + b)->digest,
-                    fd, &offset, &file_left, buf);
-            fclose(fd);
-            fd = (FILE *) -1;
-            offset = 0;
-            total -= file_left;
-            sent += file_left;
-            f = next_f(jo, f);
-            b = next_b(jo, b);
-            block_left = (jo->blocks + b)->size;
-        } else { /*block_left < file_left*/
+        if (LIKELY(block_left < file_left)) {
+            /*block_left < file_left*/
             (jo->blocks + b)->digest = fnv_hash_file((jo->blocks + b)->digest,
                     fd, &offset, &block_left, buf);
             b = next_b(jo, b);
@@ -144,6 +121,23 @@ void * fnv_hash_worker_f(void * a) {
             offset += block_left;
             sent += block_left;
             block_left = (jo->blocks + b)->size;
+        } else {
+            (jo->blocks + b)->digest = fnv_hash_file((jo->blocks + b)->digest,
+                    fd, &offset, &file_left, buf);
+            fclose(fd);
+            fd = (FILE *) -1;
+            offset = 0;
+            total -= file_left;
+            sent += file_left;
+            f = next_f(jo, f);
+            if (LIKELY(block_left > file_left)) {
+                /*block_left > file_left*/
+                block_left -= file_left;
+            } else {
+                /*block_left == file_left*/
+                b = next_b(jo, b);
+                block_left = (jo->blocks + b)->size;
+            }
         }
         //fprintf(stderr, "block %ld \n", sent/BLOCK_SIZE);
     }

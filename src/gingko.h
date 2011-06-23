@@ -9,11 +9,17 @@
 #include <stdio.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <assert.h>
+#include <stdint.h>
 #include <dirent.h>
 #include <ftw.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#ifdef __APPLE__
 #include <sys/uio.h>
+#else
+#include <sys/sendfile.h>
+#endif /* __APPLE__ */
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <string.h>
@@ -44,7 +50,7 @@ using namespace std;
 #define MAX_JOBS                    1024   	// for global locks
 #define MAX_REQ_SERV_BLOCKS			20		// req at max MAX_REQ_SERV_BLOCKS from serv
 #define MAX_URI                     MAX_PATH_LEN
-#define MAX_INT64					9223372036854775807L
+#define MAX_INT64					((1LL<<sizeof(int64_t)*8-1)-1)
 #define MAX_RETRY					3		// retry 3 times then fail
 #define MAX_LONG_INT                19    	// int64_t int char
 #define MYSTACKSIZE                 (10*1024*1024) // default at MacOS is 512k
@@ -105,6 +111,36 @@ static bool operator ==(const s_host& lhost, const s_host& rhost) {\
 		lhost.port == rhost.port);\
 }
 #endif /* GINGKO_OVERLOAD_S_HOST_EQ */
+#define ERR_RW_RETRIABLE(e)              \
+    ((e) == EINTR || (e) == EAGAIN)
+
+/* Evaluates to the same boolean value as 'p', and hints to the compiler that
+ * we expect this value to be false. */
+#ifdef __GNUC__
+#define LIKELY(p) __builtin_expect(!!(p), 1)
+#define UNLIKELY(p) __builtin_expect(!!(p), 0)
+#else
+#define LIKELY(p) (p)
+#define UNLIKELY(p) (p)
+#endif
+
+/* Replacement for assert() that calls event_errx on failure. */
+#define ASSERT(cond)                     \
+    do {                                \
+        if (UNLIKELY(!(cond))) {             \
+            perr("Assertion: (%s) failed, %s() in %s:%d : ",     \
+                 #cond,__func__,__FILE__,__LINE__);      \
+            /* In case a user-supplied handler tries to */  \
+            /* return control to us, log and abort here. */ \
+            (void)fprintf(stderr,               \
+                "Assertion: (%s) failed, %s() in %s:%d ",     \
+                #cond,__func__,__FILE__,__LINE__);      \
+            abort();                    \
+        }                           \
+    } while (0)
+#define SUCC_CHECK(cond) LIKELY(cond)
+#define FAIL_CHECK(cond) UNLIKELY(cond)
+
 
 /************** FUNC DICT **************/
 typedef void * (*func_t)(void *, int);
@@ -238,7 +274,31 @@ inline u_int64_t host_distance(const s_host * h1, const s_host * h2) {
                     + (u_int64_t) h2->port);
 }
 
+inline int gsendfile(int out_fd, int in_fd, off_t *offset, u_int64_t *count) {
+#if defined (__APPLE__)
+    int ret = sendfile(in_fd, out_fd, *offset, (off_t *) count, NULL, 0);
+    if (ret == -1 && !ERR_RW_RETRIABLE(errno))
+        return (-1);
+
+    return (*count);
+#elif defined (__FreeBSD__)
+    int ret = sendfile(in_fd, out_fd, *offset, *count, NULL, (off_t *) count, 0);
+    if (ret == -1 && !ERR_RW_RETRIABLE(errno))
+        return (-1);
+
+    return (*count);
+#elif defined(__linux__)
+    int ret = sendfile(out_fd, in_fd, offset, *count);
+    if (ret == -1 && ERR_RW_RETRIABLE(errno)) {
+        /* if this is EAGAIN or EINTR return 0; otherwise, -1 */
+        return (0);
+    }
+    return (ret);
+#endif
+}
+
 void perr(const char *fmt, ...);
+void abort_handler(const int sig);
 char * gettimestr(char * time);
 int list_file(const char *name, const struct stat *status, int type,
         struct FTW * ftw_info);
@@ -254,6 +314,7 @@ int connect_host(s_host * h, int recv_sec, int send_sec);
 int close_socket(int sock);
 void bw_down_limit(int amount);
 void bw_up_limit(int amount);
+int erase_job(string &uri_string);
 host_hash_result * host_hash(s_job * jo, const s_host * new_host,
         host_hash_result * result);
 int sendblocks(int out_fd, s_job * jo, int64_t start, int64_t num);
@@ -263,6 +324,7 @@ void conn_send_data(int fd, void *str, unsigned int len);
 int64_t getblock(s_host * ds, int64_t num, int64_t count, unsigned char flag,
         char * buf);
 int broadcast_join(s_host * host_array, s_host *h);
-int sendcmd(s_host *h, const char * cmd);
+int sendcmd(s_host *h, const char * cmd, int recv_sec, int send_sec);
+void ev_fn_gsendfile(int fd, short ev, void *arg);
 
 #endif /* GINGKO_H_ */

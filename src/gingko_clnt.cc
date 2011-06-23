@@ -31,11 +31,11 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
-#ifdef _BSD_MACHINE_TYPES_H_
+#ifdef __APPLE__
 #include <sys/uio.h>
 #else
 #include <sys/sendfile.h>
-#endif /* _BSD_MACHINE_TYPES_H_ */
+#endif /* __APPLE__ */
 
 #include "gingko.h"
 #include "async_pool.h"
@@ -68,7 +68,6 @@ FILE * log_fp;
 // ready_to_serv flog
 char ready_to_serv = 0;
 
-char is_server = 0;
 static struct hostent *serv;
 s_job job;
 //save the NEWWed host when server is not ready
@@ -352,9 +351,14 @@ void * join_job_c(void * arg, int fd) {
     return (void *) 0;
 }
 
-void * quit_job_s(void *, int fd) {
-    printf("quit_job\n");
-    return (void *) 0;
+int quit_job_c(s_host * quit_host, s_host * server, char * uri) {
+    char msg[MSG_LEN];
+    /*
+     * send "QUIT uri host port" to server
+     */
+    snprintf(msg, MSG_LEN, "QUIT\t%s\t%s\t%d", job.uri, quit_host->addr, quit_host->port);
+    //printf("sent: %s\n", msg);
+    return sendcmd(server, msg, 2, 2);
 }
 
 void * g_none_s(void *, int fd) {
@@ -379,10 +383,7 @@ int async_server_base_init() {
     server->on_data_callback = conn_send_data;
     // A new TCP server
     while (conn_tcp_server(server) == -13) {
-        if (port <= MIN_PORT) {
-            perr("bind port failed ..wired!!!\n");
-            exit(1);
-        }
+        ASSERT(port > MIN_PORT);
         server->srv_port = --port;
         usleep(10);
     }
@@ -624,14 +625,8 @@ void * downloadworker(void *) {
     while (the_host.port == 0) {
         usleep(100);
     }
-    if (join_job_c((void *) job.uri, 0)) {
-        perr("JOIN error %s\n", job.uri);
-        exit(JOIN_ERR);
-    }
-    if (mk_dir_softlink(NULL)) {
-        perr("mk_dir_softlink() failed\n");
-        exit(MK_DIR_SYMLINK_ERR);
-    }
+    ASSERT(join_job_c((void *) job.uri, 0) == 0);
+    ASSERT(mk_dir_softlink(NULL) == 0);
     for (int64_t i = 0; i < job.block_count; i++) {
         (job.blocks + i)->done = 0;
     }
@@ -650,10 +645,7 @@ void * downloadworker(void *) {
         host_hash(&job, &(*it), NULL);
     }
     pthread_mutex_unlock(&noready_mutex);
-    if (node_download(NULL)) {
-        perr("node_download failed\n");
-        exit(DOWNLOAD_ERR);
-    }
+    ASSERT(node_download(NULL) == 0);
     printf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@node_download done\n");
     for (int64_t i = 0; i < job.block_count; i++) {
         if ((job.blocks + i)->done != 1) {
@@ -684,9 +676,14 @@ static inline int pthread_clean() {
     return 0;
 }
 
-static void sig_handler(const int sig) {
-    fprintf(stderr, "\nSIGINT handled, client terminated\n");
+static void int_handler(const int sig) {
+    fprintf(stderr, "\nSIGINT handled.\n");
+    /*
+     * send QUIT cmd to server
+     */
+    quit_job_c(&the_host, &the_server, job.uri);
     // Clear all status
+    fprintf(stderr, "\nClient terminated.\n");
     exit(-1);
 }
 
@@ -696,11 +693,11 @@ void set_sig() {
             (struct sigaction *) malloc(sizeof(struct sigaction));
 
     // SIGINT
-    signal(SIGINT, sig_handler);
-    signal(SIGTERM, sig_handler);
-    signal(SIGQUIT, sig_handler);
-    signal(SIGKILL, sig_handler);
-    signal(SIGHUP, sig_handler);
+    signal(SIGINT, int_handler);
+    signal(SIGTERM, int_handler);
+    signal(SIGQUIT, int_handler);
+    signal(SIGKILL, int_handler);
+    signal(SIGHUP, int_handler);
 
     /* Ignore terminal signals */
     signal(SIGTTOU, SIG_IGN);
@@ -712,10 +709,7 @@ void set_sig() {
     sa->sa_flags = 0;
     signal(SIGPIPE, SIG_IGN);
     signal(SIGCHLD, SIG_IGN);
-    if (sigemptyset(&sa->sa_mask) == -1 || sigaction(SIGPIPE, sa, 0) == -1) {
-        fprintf(stderr, "Ignore SIGPIPE failed\n");
-        exit(-1);
-    }
+    ASSERT(sigemptyset(&sa->sa_mask) == -1 || sigaction(SIGPIPE, sa, 0) != -1);
 
     return;
 }
@@ -724,9 +718,8 @@ int main(int argc, char *argv[]) {
     set_sig();
     pthread_t download, upload;
     void *status;
-    if (!(log_fp = fopen(CLIENT_LOG, "a+")))
-        fprintf(stderr, "open log for appending failed");
-#ifdef _BSD_MACHINE_TYPES_H_
+    ASSERT(log_fp = fopen(CLIENT_LOG, "a+"));
+#ifdef __APPLE__
     printf("DARWIN\n");
 #else
     printf("LINUX\n");
@@ -766,9 +759,11 @@ int main(int argc, char *argv[]) {
 
     pthread_join(download, &status);
     sleep(60);
-    free(gethostname_buf);
-    return 0;
-    pthread_join(upload, &status);
+    quit_job_c(&the_host, &the_server, job.uri);
+//    free(gethostname_buf);
     pthread_clean();
     return 0;
+//    pthread_join(upload, &status);
+//    pthread_clean();
+//    return 0;
 }

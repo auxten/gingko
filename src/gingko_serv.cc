@@ -31,11 +31,11 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
-#ifdef _BSD_MACHINE_TYPES_H_
+#ifdef __APPLE__
 #include <sys/uio.h>
 #else
 #include <sys/sendfile.h>
-#endif /* _BSD_MACHINE_TYPES_H_ */
+#endif /* __APPLE__ */
 
 #include <map>
 #include <string>
@@ -70,28 +70,57 @@ GINGKO_OVERLOAD_S_HOST_LT
 struct event_base *ev_base;
 extern struct conn_server *server;
 
-char is_server = 1;
 FILE * log_fp;
 map<string, s_job> m_jobs;// jobs map
 
-
-void * quit_job_s(void * uri, int fd) {
-    printf("quit_job\n");
-    return (void *) 0;
-}
 
 void * g_none_s(void * uri, int fd) {
     printf("none\n");
     return (void *) 0;
 }
 
+int erase_job(string &uri_string) {
+    extern map<string, s_job> m_jobs;// jobs map
+    extern pthread_rwlock_t grand_lock;
+    extern s_lock job_lock[MAX_JOBS];
+    map<string, s_job>::iterator it;
+    pthread_rwlock_rdlock(&grand_lock);
+    if ((it = m_jobs.find(uri_string)) == m_jobs.end()) {
+        return -1;
+    }
+    s_job *p = &(it->second);
+    pthread_rwlock_unlock(&grand_lock);
+    pthread_rwlock_wrlock(&job_lock[p->lock_id].lock);
+    if(p->blocks) {
+        free(p->blocks);
+        p->blocks = NULL;
+    }
+    if(p->files) {
+        free(p->files);
+        p->files = NULL;
+    }
+    if(p->host_set) {
+        delete p->host_set;
+        p->host_set = NULL;
+    }
+    pthread_rwlock_unlock(&job_lock[p->lock_id].lock);
+    /*
+     * for safety reinit the rwlock
+     */
+    pthread_rwlock_destroy(&(job_lock[p->lock_id].lock));
+    pthread_rwlock_init(&(job_lock[p->lock_id].lock), NULL);
+    job_lock[p->lock_id].state = LK_FREE;
+
+    m_jobs.erase(uri_string);
+    return 0;
+}
+
 int broadcast_join(s_host * host_array, s_host *h) {
     s_host * p_h = host_array;
-    char buf[SHORT_MSG_LEN];
-    memset(buf, 0, SHORT_MSG_LEN);
+    char buf[SHORT_MSG_LEN] = {'\0'};
     sprintf(buf, "NEWW\t%s\t%d", h->addr, h->port);
     while (p_h->port) {
-        sendcmd(p_h, buf);
+        sendcmd(p_h, buf, 2, 2);
         p_h++;
     }
     return 0;
@@ -105,13 +134,9 @@ int init_daemon(void) {
     /* Ignore terminal signals */
     set_sig();
     /* Exit the parent process and background the child*/
-    if (fork() != 0)
-        exit(1);
+    ASSERT(fork() == 0);
 
-    if (setsid() < 0) {
-        perror("setsid fail\n");
-        exit(1);
-    }
+    ASSERT(setsid() > 0);
     //for ( fd=0; fd< 3; fd++) ;
     //close(fd);
     umask(0);
@@ -119,13 +144,13 @@ int init_daemon(void) {
     return 0;
 }
 
-static void sig_handler(const int sig) {
-    fprintf(stderr, "\nSIGINT handled, server terminated\n");
+static void int_handler(const int sig) {
+    fprintf(stderr, "\nSIGNAL handled, server terminated\n");
     // Clear all status
     conn_close();
     exit(-1);
-    return;
 }
+
 
 /* Set signal handler */
 void set_sig() {
@@ -133,11 +158,11 @@ void set_sig() {
             (struct sigaction *) malloc(sizeof(struct sigaction));
 
     // SIGINT
-    signal(SIGINT, sig_handler);
-    signal(SIGTERM, sig_handler);
-    signal(SIGQUIT, sig_handler);
-    signal(SIGKILL, sig_handler);
-    signal(SIGHUP, sig_handler);
+    signal(SIGINT, int_handler);
+    signal(SIGTERM, int_handler);
+    signal(SIGQUIT, int_handler);
+    signal(SIGKILL, int_handler);
+    signal(SIGHUP, int_handler);
 
     /* Ignore terminal signals */
     signal(SIGTTOU, SIG_IGN);
@@ -149,11 +174,7 @@ void set_sig() {
     sa->sa_flags = 0;
     signal(SIGPIPE, SIG_IGN);
     signal(SIGCHLD, SIG_IGN);
-    if (sigemptyset(&sa->sa_mask) == -1 || sigaction(SIGPIPE, sa, 0) == -1) {
-        fprintf(stderr, "Ignore SIGPIPE failed\n");
-        exit(-1);
-    }
-
+    ASSERT(sigemptyset(&sa->sa_mask) != -1 && sigaction(SIGPIPE, sa, 0) != -1);
     return;
 }
 

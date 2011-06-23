@@ -16,9 +16,9 @@ gingko_clnt_SOURCES=async_threads.cc async_conn.cc gingko_clnt.cc \
 gingko_clnt_LDADD=$(srcdir)/../lib/libevent/.libs/libevent.a
 gingko_clnt_LDFLAGS=-D_GNU_SOURCE -ggdb -funsigned-char
 
-gingko_test_clnt_SOURCES=async_threads.cc async_conn.cc gingko_test_clnt.cc \
-    gingko_base.cc  md5.cc fnv_hash.cc path.cc
-gingko_test_clnt_LDADD=$(srcdir)/../lib/libevent/.libs/libevent.a
-gingko_test_clnt_LDFLAGS=-D_GNU_SOURCE -ggdb -funsigned-char
+#gingko_test_clnt_SOURCES=async_threads.cc async_conn.cc gingko_test_clnt.cc \
+#    gingko_base.cc  md5.cc fnv_hash.cc path.cc
+#gingko_test_clnt_LDADD=$(srcdir)/../lib/libevent/.libs/libevent.a
+#gingko_test_clnt_LDFLAGS=-D_GNU_SOURCE -ggdb -funsigned-char
 
 DEFS+=-D_GNU_SOURCE

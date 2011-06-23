@@ -99,7 +99,7 @@ int decide_src(s_job * jo, int src_max, int64_t blk_num,
                 b->done = 1;
             }
             blk_i++;
-            tmp_time = (after_tv.tv_sec - before_tv.tv_sec) * 1000000L
+            tmp_time = (after_tv.tv_sec - before_tv.tv_sec) * 1000000LL
                     + after_tv.tv_usec - before_tv.tv_usec;
         } else {
             /*

@@ -77,11 +77,9 @@ int conn_tcp_server(struct conn_server *c) {
     }
 
     // Set socket options
-    struct timeval send_timeout =
-    {
-        tv_sec: server->send_timeout,
-        tv_usec: 0
-    };
+    struct timeval send_timeout;
+    send_timeout.tv_sec = server->send_timeout;
+    send_timeout.tv_usec = 0;
 
     setsockopt(server->listen_fd, SOL_SOCKET, SO_REUSEADDR, &server->tcp_reuse,
             sizeof(server->tcp_reuse));

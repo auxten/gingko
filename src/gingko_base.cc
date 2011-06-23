@@ -30,11 +30,11 @@
 
 #include "fnv_hash.h"
 #include "gingko.h"
-#ifdef _BSD_MACHINE_TYPES_H_
+#ifdef __APPLE__
 #include <sys/uio.h>
 #else
 #include <sys/sendfile.h>
-#endif /* _BSD_MACHINE_TYPES_H_ */
+#endif /* __APPLE__ */
 
 #include "event.h"
 
@@ -51,6 +51,10 @@ void perr(const char *fmt, ...) {
     fflush(log_fp);
     va_end(args);
     return;
+}
+
+void abort_handler(const int sig) {
+    abort();
 }
 
 char * gettimestr(char * time){
@@ -79,7 +83,7 @@ int sep_arg(char * inputstring, char * arg_array[], int max) {
 extern char cmd_list[CMD_COUNT][8];
 int parse_req(char *req) {
     u_int i;
-    if (!req) {
+    if (UNLIKELY(!req)) {
         return sizeof(cmd_list) / sizeof(cmd_list[0]) - 1;
     }
     for (i = 0; i < sizeof(cmd_list) / sizeof(cmd_list[0]) - 1; i++) {
@@ -96,15 +100,15 @@ int parse_req(char *req) {
  */
 struct hostent * gethostname_my(const char *host, struct hostent *hostbuf,
         char ** tmphstbuf, size_t hstbuflen) {
-#ifdef _BSD_MACHINE_TYPES_H_
+#ifdef __APPLE__
     return gethostbyname(host);
 #else
     struct hostent *hp;
     int res;
     int herr;
 
-    while ((res = gethostbyname_r(host, hostbuf, *tmphstbuf, hstbuflen,
-                                   &hp, &herr)) == ERANGE){
+    while (UNLIKELY((res = gethostbyname_r(host, hostbuf, *tmphstbuf, hstbuflen,
+                                   &hp, &herr)) == ERANGE)){
         /* Enlarge the buffer.  */
         hstbuflen *= 2;
         *tmphstbuf = (char *)realloc (*tmphstbuf, hstbuflen);
@@ -133,12 +137,12 @@ int connect_host(s_host * h, int recv_sec, int send_sec) {
     char * gethostname_buf = (char *)malloc(1024);
     struct hostent host_buf;
     host = gethostname_my(h->addr, &host_buf, &gethostname_buf, 1024);
-    if (!host) {
+    if (FAIL_CHECK(!host)) {
         perr("gethostbyname %s error\n", h->addr);
         return -1;
     }
     sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (sock < 0) {
+    if (FAIL_CHECK(sock < 0)) {
         perr("get socket error\n");
         return -1;
     }
@@ -148,7 +152,7 @@ int connect_host(s_host * h, int recv_sec, int send_sec) {
     memcpy(&channel.sin_addr.s_addr, host->h_addr, host->h_length);
     channel.sin_port = htons(h->port);
     //connect and send the msg
-    if (0 > connect(sock, (struct sockaddr *) &channel, sizeof(channel))) {
+    if (FAIL_CHECK(0 > connect(sock, (struct sockaddr *) &channel, sizeof(channel)))) {
         free(gethostname_buf);
         perr("connect %s:%d ", h->addr, h->port);
         return -1;
@@ -179,7 +183,7 @@ int close_socket(int sock) {
     //		perr("shutdown sock error %s\n", strerror(errno));
     //		return -1;
     //	}
-    if (close(sock)) {
+    if (FAIL_CHECK(close(sock))) {
         perr("close sock error");
         return -1;
     }
@@ -199,7 +203,7 @@ void bw_down_limit(int amount) {
         return;
     }
     pthread_mutex_lock(&bw_down_mutex);
-    if (!timerisset(&bw_down_start)) {
+    if (UNLIKELY(!timerisset(&bw_down_start))) {
         gettimeofday(&bw_down_start, NULL);
         pthread_mutex_unlock(&bw_down_mutex);
         return;
@@ -262,7 +266,7 @@ void bw_up_limit(int amount) {
         return;
     }
     pthread_mutex_lock(&bw_up_mutex);
-    if (!timerisset(&bw_up_start)) {
+    if (UNLIKELY(!timerisset(&bw_up_start))) {
         gettimeofday(&bw_up_start, NULL);
         pthread_mutex_unlock(&bw_up_mutex);
         return;
@@ -329,52 +333,6 @@ void conn_send_data(int fd, void *str, unsigned int len) {
     return;
 }
 
-#ifdef _BSD_MACHINE_TYPES_H_
-inline int gsendfile(int out_fd, int in_fd, off_t *offset, u_int64_t *count) {
-    sendfile(in_fd, out_fd, *offset, (off_t *) count, NULL, 0);
-    return *count;
-}
-#else
-inline int gsendfile (int out_fd, int in_fd, off_t *offset, u_int64_t *count) {
-    return sendfile(out_fd, in_fd, offset, *count);
-}
-#endif /* _BSD_MACHINE_TYPES_H_ */
-
-/*
- * event handle of sendfile
- */
-void ev_fn_gsendfile(int fd, short ev, void *arg) {
-    extern char is_server;
-    s_gsendfile_arg * a = (s_gsendfile_arg *) arg;
-    off_t tmp_off = a->offset + a->send_counter;
-    u_int64_t tmp_counter = a->count - a->send_counter;
-    struct timeval t;
-    t.tv_sec = 0;
-    t.tv_usec = 1;
-    if (((a->sent = gsendfile(fd, a->in_fd, &tmp_off, &tmp_counter)) > 0)
-            || (a->sent == -1 && errno == EAGAIN)) {
-        //printf("res: %d\n",res);
-        //printf("%s",client->read_buffer+read_counter);
-        if (a->sent == -1) {
-            perror("send error\n");
-        }
-        if (! is_server) {
-            bw_up_limit(a->sent);
-        }
-        //printf("sentfile: %d\n", a->sent);
-        if ((a->send_counter = (a->sent > 0 ? a->sent : 0) + a->send_counter)
-                == a->count) {
-            event_del(&(a->ev_write));
-        }
-        a->retry = 0;
-    }else if(errno == EPIPE){
-        if(a->retry++ > 3) {
-            event_base_loopexit(a->ev_base, &t);
-        }
-    }
-    return;
-}
-
 /*
  * event handle of write
  */
@@ -384,18 +342,15 @@ void ev_fn_write(int fd, short ev, void *arg) {
     t.tv_sec = 0;
     t.tv_usec = 1;
     if (((a->sent = send(fd, a->p + a->send_counter, a->sz - a->send_counter,
-            a->flag)) > 0) || (a->sent == -1 && errno == EAGAIN)) {
+            a->flag)) >= 0) || ERR_RW_RETRIABLE(errno)) {
         //printf("res: %d\n",res);
         //printf("%s",client->read_buffer+read_counter);
-        if (a->sent == -1) {
-            perror("send error\n");
-        }
         //printf("sent: %d\n", a->sent);
         if ((a->send_counter = MAX(a->sent, 0) + a->send_counter) == a->sz) {
             event_del(&(a->ev_write));
         }
         a->retry = 0;
-    }else if(errno == EPIPE){
+    } else {
         if(a->retry++ > 3) {
             event_base_loopexit(a->ev_base, &t);
         }
@@ -599,10 +554,14 @@ int writeblock(s_job * jo, const unsigned char * buf, s_block * blk) {
 /*
  * send cmd msg to host, not read response
  */
-int sendcmd(s_host *h, const char * cmd) {
-    int sock;
-    sock = connect_host(h, 2, 1);
-    sendall(sock, cmd, strlen(cmd), 0);
+int sendcmd(s_host *h, const char * cmd, int recv_sec, int send_sec) {
+    int sock, result;
+    sock = connect_host(h, recv_sec, send_sec);
+    if (sock < 0) {
+        perr("sendcmd() connect_host error");
+        return -1;
+    }
+    result = sendall(sock, cmd, strlen(cmd), 0);
     close_socket(sock);
-    return 0;
+    return result;
 }
