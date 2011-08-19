@@ -20,9 +20,6 @@
 #include "job_state.h"
 #include "gingko_serv.h"
 
-#include "gtest/gtest.h"
-#include "unittest.h"
-
 /************** PTHREAD STUFF **************/
 ///server wide lock
 pthread_rwlock_t g_grand_lock;
@@ -37,6 +34,9 @@ map<string, s_job_t *> g_m_jobs;
 s_gingko_global_t gko;
 
 #ifdef UNITTEST
+
+#include "gtest/gtest.h"
+#include "unittest.h"
 
 /************** FUNC DICT **************/
 #include "gingko_common.h"

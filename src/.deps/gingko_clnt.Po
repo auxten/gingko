@@ -1,5 +1,5 @@
-gingko_clnt.o gingko_clnt.o: gingko_clnt.cc /usr/include/stdio.h \
-  /usr/include/_types.h /usr/include/sys/_types.h \
+gingko_clnt.o gingko_clnt.o: gingko_clnt.cpp config.h \
+  /usr/include/stdio.h /usr/include/_types.h /usr/include/sys/_types.h \
   /usr/include/sys/cdefs.h /usr/include/machine/_types.h \
   /usr/include/i386/_types.h /usr/include/stdlib.h \
   /usr/include/Availability.h /usr/include/AvailabilityInternal.h \
@@ -27,8 +27,15 @@ gingko_clnt.o gingko_clnt.o: gingko_clnt.cc /usr/include/stdio.h \
   /usr/include/sys/_select.h /usr/include/signal.h /usr/include/errno.h \
   /usr/include/sys/errno.h /usr/include/fcntl.h /usr/include/sys/fcntl.h \
   /usr/include/pthread.h /usr/include/pthread_impl.h /usr/include/sched.h \
-  /usr/include/sys/uio.h gingko.h /usr/include/dirent.h \
-  /usr/include/sys/dirent.h /usr/include/ftw.h \
+  /usr/include/getopt.h /usr/include/inttypes.h /usr/include/sys/uio.h \
+  gingko.h /usr/include/dirent.h /usr/include/sys/dirent.h \
+  /usr/lib/gcc/i686-apple-darwin10/4.2.1/include/limits.h \
+  /usr/lib/gcc/i686-apple-darwin10/4.2.1/include/syslimits.h \
+  /usr/include/limits.h /usr/include/machine/limits.h \
+  /usr/include/i386/limits.h /usr/include/i386/_limits.h \
+  /usr/include/sys/syslimits.h /usr/include/ftw.h \
+  /usr/include/sys/param.h /usr/include/machine/param.h \
+  /usr/include/i386/param.h /usr/include/i386/_param.h \
   /usr/include/c++/4.2.1/string \
   /usr/include/c++/4.2.1/i686-apple-darwin10/x86_64/bits/c++config.h \
   /usr/include/c++/4.2.1/i686-apple-darwin10/x86_64/bits/os_defines.h \
@@ -38,12 +45,7 @@ gingko_clnt.o gingko_clnt.o: gingko_clnt.cc /usr/include/stdio.h \
   /usr/include/c++/4.2.1/cstring /usr/include/c++/4.2.1/cstddef \
   /usr/lib/gcc/i686-apple-darwin10/4.2.1/include/stddef.h \
   /usr/include/c++/4.2.1/bits/stl_algobase.h \
-  /usr/include/c++/4.2.1/climits \
-  /usr/lib/gcc/i686-apple-darwin10/4.2.1/include/limits.h \
-  /usr/lib/gcc/i686-apple-darwin10/4.2.1/include/syslimits.h \
-  /usr/include/limits.h /usr/include/machine/limits.h \
-  /usr/include/i386/limits.h /usr/include/i386/_limits.h \
-  /usr/include/sys/syslimits.h /usr/include/c++/4.2.1/cstdlib \
+  /usr/include/c++/4.2.1/climits /usr/include/c++/4.2.1/cstdlib \
   /usr/include/c++/4.2.1/iosfwd \
   /usr/include/c++/4.2.1/i686-apple-darwin10/x86_64/bits/c++locale.h \
   /usr/include/c++/4.2.1/clocale /usr/include/locale.h \
@@ -93,21 +95,16 @@ gingko_clnt.o gingko_clnt.o: gingko_clnt.cc /usr/include/stdio.h \
   /usr/include/c++/4.2.1/bits/stl_multiset.h \
   /usr/include/c++/4.2.1/vector /usr/include/c++/4.2.1/bits/stl_vector.h \
   /usr/include/c++/4.2.1/bits/stl_bvector.h \
-  /usr/include/c++/4.2.1/bits/vector.tcc ../lib/libevent/event.h \
-  ../lib/libevent/include/event2/event-config.h /usr/include/sys/time.h \
-  ../lib/libevent/evutil.h ../lib/libevent/include/event2/util.h \
-  ../lib/libevent/include/event2/event_struct.h \
-  ../lib/libevent/include/event2/keyvalq_struct.h \
-  ../lib/libevent/include/event2/event.h \
-  ../lib/libevent/include/event2/event_compat.h \
-  ../lib/libevent/include/event2/buffer.h \
-  ../lib/libevent/include/event2/buffer_compat.h \
-  ../lib/libevent/include/event2/bufferevent.h \
-  ../lib/libevent/include/event2/bufferevent_struct.h \
-  ../lib/libevent/include/event2/bufferevent_compat.h \
-  ../lib/libevent/include/event2/tag.h \
-  ../lib/libevent/include/event2/tag_compat.h async_pool.h fnv_hash.h \
-  path.h route.h gingko_common.h
+  /usr/include/c++/4.2.1/bits/vector.tcc \
+  ../../../../../../third-64/libevent/include/event.h \
+  ../../../../../../third-64/libevent/include/event-config.h \
+  /usr/include/sys/time.h \
+  ../../../../../../third-64/libevent/include/evutil.h async_pool.h \
+  hash/xor_hash.h hash/../gingko.h \
+  ../../../../../../third-64/libevent/include/event.h path.h route.h \
+  log.h snap.h option.h socket.h limit.h job_state.h gingko_clnt.h
+
+config.h:
 
 /usr/include/stdio.h:
 
@@ -229,6 +226,10 @@ gingko_clnt.o gingko_clnt.o: gingko_clnt.cc /usr/include/stdio.h \
 
 /usr/include/sched.h:
 
+/usr/include/getopt.h:
+
+/usr/include/inttypes.h:
+
 /usr/include/sys/uio.h:
 
 gingko.h:
@@ -237,7 +238,29 @@ gingko.h:
 
 /usr/include/sys/dirent.h:
 
+/usr/lib/gcc/i686-apple-darwin10/4.2.1/include/limits.h:
+
+/usr/lib/gcc/i686-apple-darwin10/4.2.1/include/syslimits.h:
+
+/usr/include/limits.h:
+
+/usr/include/machine/limits.h:
+
+/usr/include/i386/limits.h:
+
+/usr/include/i386/_limits.h:
+
+/usr/include/sys/syslimits.h:
+
 /usr/include/ftw.h:
+
+/usr/include/sys/param.h:
+
+/usr/include/machine/param.h:
+
+/usr/include/i386/param.h:
+
+/usr/include/i386/_param.h:
 
 /usr/include/c++/4.2.1/string:
 
@@ -260,20 +283,6 @@ gingko.h:
 /usr/include/c++/4.2.1/bits/stl_algobase.h:
 
 /usr/include/c++/4.2.1/climits:
-
-/usr/lib/gcc/i686-apple-darwin10/4.2.1/include/limits.h:
-
-/usr/lib/gcc/i686-apple-darwin10/4.2.1/include/syslimits.h:
-
-/usr/include/limits.h:
-
-/usr/include/machine/limits.h:
-
-/usr/include/i386/limits.h:
-
-/usr/include/i386/_limits.h:
-
-/usr/include/sys/syslimits.h:
 
 /usr/include/c++/4.2.1/cstdlib:
 
@@ -405,44 +414,36 @@ gingko.h:
 
 /usr/include/c++/4.2.1/bits/vector.tcc:
 
-../lib/libevent/event.h:
+../../../../../../third-64/libevent/include/event.h:
 
-../lib/libevent/include/event2/event-config.h:
+../../../../../../third-64/libevent/include/event-config.h:
 
 /usr/include/sys/time.h:
 
-../lib/libevent/evutil.h:
-
-../lib/libevent/include/event2/util.h:
-
-../lib/libevent/include/event2/event_struct.h:
-
-../lib/libevent/include/event2/keyvalq_struct.h:
-
-../lib/libevent/include/event2/event.h:
-
-../lib/libevent/include/event2/event_compat.h:
-
-../lib/libevent/include/event2/buffer.h:
-
-../lib/libevent/include/event2/buffer_compat.h:
-
-../lib/libevent/include/event2/bufferevent.h:
-
-../lib/libevent/include/event2/bufferevent_struct.h:
-
-../lib/libevent/include/event2/bufferevent_compat.h:
-
-../lib/libevent/include/event2/tag.h:
-
-../lib/libevent/include/event2/tag_compat.h:
+../../../../../../third-64/libevent/include/evutil.h:
 
 async_pool.h:
 
-fnv_hash.h:
+hash/xor_hash.h:
+
+hash/../gingko.h:
+
+../../../../../../third-64/libevent/include/event.h:
 
 path.h:
 
 route.h:
 
-gingko_common.h:
+log.h:
+
+snap.h:
+
+option.h:
+
+socket.h:
+
+limit.h:
+
+job_state.h:
+
+gingko_clnt.h:

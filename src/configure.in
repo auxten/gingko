@@ -2,11 +2,11 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([1.68])
-AC_INIT([gingko_serv,gingko_clnt,gingko_test_clnt], [3.14], [blog.auxten.com])
+AC_INIT([libxor_hash.a,gingko_serv,gingko_clnt,unittest], [3.14], [blog.auxten.com])
 AC_CONFIG_SRCDIR([config.h.in])
 AM_CONFIG_HEADER([config.h])
 #AC_CONFIG_HEADERS([config.h])
-AM_INIT_AUTOMAKE([gingko_serv,gingko_clnt,gingko_test_clnt],3.14)
+AM_INIT_AUTOMAKE([libxor_hash.a,gingko_serv,gingko_clnt,unittest],3.14)
 
 ##########################################################################
 # debug compilation support
@@ -21,11 +21,103 @@ AC_ARG_ENABLE([debug],
 AC_MSG_RESULT([$debugit])
 
 if test x"$debugit" = x"yes"; then
-    AC_DEFINE([DEBUG],[],[Debug Mode])
-    AM_CXXFLAGS="-ggdb -Wall -Wno-uninitialized -O0"
+    AC_DEFINE([GKO_DEBUG],[],[Debug Mode])
+    AM_CXXFLAGS="-ggdb -Wall -O0"
 else
-    AC_DEFINE([NDEBUG],[],[No-debug Mode])
-    AM_CXXFLAGS="$AM_CXXFLAGS -ggdb -O2"
+    AC_DEFINE([NGKO_DEBUG],[],[No-debug Mode])
+    AM_CXXFLAGS="$AM_CXXFLAGS"
+fi
+
+AC_SUBST([AM_CXXFLAGS])
+##########################################################################
+
+##########################################################################
+# unittest compilation support
+##########################################################################
+
+AC_MSG_CHECKING([whether to build unittest version])
+AC_ARG_ENABLE([unittest],
+    [AS_HELP_STRING([--enable-unittest],
+        [enable unittest code generation (def=no)])],
+    [unittestit="$enableval"],
+    [unittestit=no])
+AC_MSG_RESULT([$unittestit])
+
+if test x"$unittestit" = x"yes"; then
+    AC_DEFINE([UNITTEST],[],[Unittest Mode])
+    AM_CXXFLAGS="-ggdb -Wall"
+else
+    AC_DEFINE([NUNITTEST],[],[No-unittest Mode])
+    AM_CXXFLAGS="$AM_CXXFLAGS"
+fi
+
+AC_SUBST([AM_CXXFLAGS])
+##########################################################################
+
+##########################################################################
+# profile compilation support
+##########################################################################
+
+AC_MSG_CHECKING([whether to build with profile information])
+AC_ARG_ENABLE([profile],
+    [AS_HELP_STRING([--enable-profile],
+        [enable profile code generation (def=no)])],
+    [profileit="$enableval"],
+    [profileit=no])
+AC_MSG_RESULT([$profileit])
+
+if test x"$profileit" = x"yes"; then
+    AC_DEFINE([PROFILE],[],[Profile Mode])
+    AM_CXXFLAGS="-ggdb -Wall -lprofiler"
+else
+    AC_DEFINE([NPROFILE],[],[No-profile Mode])
+    AM_CXXFLAGS="$AM_CXXFLAGS"
+fi
+
+AC_SUBST([AM_CXXFLAGS])
+##########################################################################
+
+##########################################################################
+# gprofile compilation support
+##########################################################################
+
+AC_MSG_CHECKING([whether to build with gprofile information])
+AC_ARG_ENABLE([gprofile],
+    [AS_HELP_STRING([--enable-gprofile],
+        [enable gprofile code generation (def=no)])],
+    [gprofileit="$enableval"],
+    [gprofileit=no])
+AC_MSG_RESULT([$gprofileit])
+
+if test x"$gprofileit" = x"yes"; then
+    AC_DEFINE([GPROFILE],[],[Profile Mode])
+    AM_CXXFLAGS="-ggdb -Wall -pg"
+else
+    AC_DEFINE([NGPROFILE],[],[No-gprofile Mode])
+    AM_CXXFLAGS="$AM_CXXFLAGS"
+fi
+
+AC_SUBST([AM_CXXFLAGS])
+##########################################################################
+
+##########################################################################
+# O3 optimize compilation support
+##########################################################################
+
+AC_MSG_CHECKING([whether to build with O3 optimization])
+AC_ARG_ENABLE([o3],
+    [AS_HELP_STRING([--enable-o3],
+        [enable O3 code generation (def=no)])],
+    [o3it="$enableval"],
+    [o3it=no])
+AC_MSG_RESULT([$o3it])
+
+if test x"$o3it" = x"yes"; then
+    AC_DEFINE([O3],[],[O3 Mode])
+    AM_CXXFLAGS="-Wall -O3 -march=nocona"
+else
+    AC_DEFINE([NO3],[],[No-O3 Mode])
+    AM_CXXFLAGS="$AM_CXXFLAGS"
 fi
 
 AC_SUBST([AM_CXXFLAGS])
@@ -52,5 +144,6 @@ AC_TYPE_SIZE_T
 AC_FUNC_FORK
 AC_CHECK_FUNCS([gethostbyname memset select socket strerror gettimeofday inet_ntoa])
 
-AC_CONFIG_FILES([Makefile])
+AC_CONFIG_SUBDIRS([hash])
+AC_CONFIG_FILES([Makefile hash/Makefile])
 AC_OUTPUT

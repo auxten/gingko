@@ -25,7 +25,7 @@ $(CLIENT): clean $(C_OBJECTS)
 		$(CC) $(CFLAGS) $(LDFLAGS) -o $(CLIENT) $(C_OBJECTS)
 		#rm -rf $(OBJECTS)
 
-%.o: %.cc
+%.o: %.cpp
 		$(CC) $(CFLAGS) $(LDFLAGS) $^ -c -o $@
 
 clean:

@@ -1,15 +1,15 @@
-gingko_base.o gingko_base.o: gingko_base.cc /usr/include/stdlib.h \
-  /usr/include/Availability.h /usr/include/AvailabilityInternal.h \
-  /usr/include/_types.h /usr/include/sys/_types.h \
-  /usr/include/sys/cdefs.h /usr/include/machine/_types.h \
-  /usr/include/i386/_types.h /usr/include/sys/wait.h \
-  /usr/include/sys/signal.h /usr/include/sys/appleapiopts.h \
-  /usr/include/machine/signal.h /usr/include/i386/signal.h \
-  /usr/include/i386/_structs.h /usr/include/sys/_structs.h \
-  /usr/include/machine/_structs.h /usr/include/mach/i386/_structs.h \
-  /usr/include/sys/resource.h /usr/include/machine/endian.h \
-  /usr/include/i386/endian.h /usr/include/sys/_endian.h \
-  /usr/include/libkern/_OSByteOrder.h \
+gingko_base.o gingko_base.o: gingko_base.cpp config.h \
+  /usr/include/stdlib.h /usr/include/Availability.h \
+  /usr/include/AvailabilityInternal.h /usr/include/_types.h \
+  /usr/include/sys/_types.h /usr/include/sys/cdefs.h \
+  /usr/include/machine/_types.h /usr/include/i386/_types.h \
+  /usr/include/sys/wait.h /usr/include/sys/signal.h \
+  /usr/include/sys/appleapiopts.h /usr/include/machine/signal.h \
+  /usr/include/i386/signal.h /usr/include/i386/_structs.h \
+  /usr/include/sys/_structs.h /usr/include/machine/_structs.h \
+  /usr/include/mach/i386/_structs.h /usr/include/sys/resource.h \
+  /usr/include/machine/endian.h /usr/include/i386/endian.h \
+  /usr/include/sys/_endian.h /usr/include/libkern/_OSByteOrder.h \
   /usr/include/libkern/i386/_OSByteOrder.h /usr/include/alloca.h \
   /usr/include/machine/types.h /usr/include/i386/types.h \
   /usr/include/i386/_types.h \
@@ -25,20 +25,30 @@ gingko_base.o gingko_base.o: gingko_base.cc /usr/include/stdlib.h \
   /usr/include/netdb.h /usr/include/unistd.h /usr/include/sys/unistd.h \
   /usr/include/sys/select.h /usr/include/sys/_select.h \
   /usr/include/signal.h /usr/include/errno.h /usr/include/sys/errno.h \
-  /usr/include/fcntl.h /usr/include/sys/fcntl.h \
-  /usr/include/c++/4.2.1/set /usr/include/c++/4.2.1/bits/stl_tree.h \
-  /usr/include/c++/4.2.1/bits/stl_algobase.h \
-  /usr/include/c++/4.2.1/i686-apple-darwin10/x86_64/bits/c++config.h \
-  /usr/include/c++/4.2.1/i686-apple-darwin10/x86_64/bits/os_defines.h \
-  /usr/include/c++/4.2.1/i686-apple-darwin10/x86_64/bits/cpu_defines.h \
-  /usr/include/c++/4.2.1/cstring /usr/include/c++/4.2.1/cstddef \
-  /usr/lib/gcc/i686-apple-darwin10/4.2.1/include/stddef.h \
-  /usr/include/c++/4.2.1/climits \
+  /usr/include/pthread.h /usr/include/pthread_impl.h /usr/include/sched.h \
+  /usr/include/fcntl.h /usr/include/sys/fcntl.h /usr/include/sys/uio.h \
+  ../../../../../../third-64/libevent/include/event.h \
+  ../../../../../../third-64/libevent/include/event-config.h \
+  /usr/include/sys/time.h \
+  ../../../../../../third-64/libevent/include/evutil.h hash/xor_hash.h \
+  hash/../gingko.h /usr/include/dirent.h /usr/include/sys/dirent.h \
   /usr/lib/gcc/i686-apple-darwin10/4.2.1/include/limits.h \
   /usr/lib/gcc/i686-apple-darwin10/4.2.1/include/syslimits.h \
   /usr/include/limits.h /usr/include/machine/limits.h \
   /usr/include/i386/limits.h /usr/include/i386/_limits.h \
-  /usr/include/sys/syslimits.h /usr/include/c++/4.2.1/cstdlib \
+  /usr/include/sys/syslimits.h /usr/include/ftw.h /usr/include/sys/stat.h \
+  /usr/include/sys/param.h /usr/include/machine/param.h \
+  /usr/include/i386/param.h /usr/include/i386/_param.h \
+  /usr/include/c++/4.2.1/string \
+  /usr/include/c++/4.2.1/i686-apple-darwin10/x86_64/bits/c++config.h \
+  /usr/include/c++/4.2.1/i686-apple-darwin10/x86_64/bits/os_defines.h \
+  /usr/include/c++/4.2.1/i686-apple-darwin10/x86_64/bits/cpu_defines.h \
+  /usr/include/c++/4.2.1/bits/stringfwd.h \
+  /usr/include/c++/4.2.1/bits/char_traits.h \
+  /usr/include/c++/4.2.1/cstring /usr/include/c++/4.2.1/cstddef \
+  /usr/lib/gcc/i686-apple-darwin10/4.2.1/include/stddef.h \
+  /usr/include/c++/4.2.1/bits/stl_algobase.h \
+  /usr/include/c++/4.2.1/climits /usr/include/c++/4.2.1/cstdlib \
   /usr/include/c++/4.2.1/iosfwd \
   /usr/include/c++/4.2.1/i686-apple-darwin10/x86_64/bits/c++locale.h \
   /usr/include/c++/4.2.1/clocale /usr/include/locale.h \
@@ -47,12 +57,11 @@ gingko_base.o gingko_base.o: gingko_base.cc /usr/include/stdlib.h \
   /usr/include/c++/4.2.1/i686-apple-darwin10/x86_64/bits/c++io.h \
   /usr/include/c++/4.2.1/i686-apple-darwin10/x86_64/bits/gthr.h \
   /usr/include/c++/4.2.1/i686-apple-darwin10/x86_64/bits/gthr-default.h \
-  /usr/include/pthread.h /usr/include/pthread_impl.h /usr/include/sched.h \
   /usr/include/c++/4.2.1/cctype /usr/include/ctype.h \
-  /usr/include/runetype.h /usr/include/c++/4.2.1/bits/stringfwd.h \
-  /usr/include/c++/4.2.1/bits/postypes.h /usr/include/c++/4.2.1/cwchar \
-  /usr/include/c++/4.2.1/ctime /usr/include/wchar.h \
-  /usr/include/_wctype.h /usr/include/c++/4.2.1/bits/functexcept.h \
+  /usr/include/runetype.h /usr/include/c++/4.2.1/bits/postypes.h \
+  /usr/include/c++/4.2.1/cwchar /usr/include/c++/4.2.1/ctime \
+  /usr/include/wchar.h /usr/include/_wctype.h \
+  /usr/include/c++/4.2.1/bits/functexcept.h \
   /usr/include/c++/4.2.1/exception_defines.h \
   /usr/include/c++/4.2.1/bits/stl_pair.h \
   /usr/include/c++/4.2.1/bits/cpp_type_traits.h \
@@ -62,23 +71,17 @@ gingko_base.o gingko_base.o: gingko_base.cc /usr/include/stdlib.h \
   /usr/include/c++/4.2.1/bits/stl_iterator_base_funcs.h \
   /usr/include/c++/4.2.1/bits/concept_check.h \
   /usr/include/c++/4.2.1/bits/stl_iterator.h \
-  /usr/include/c++/4.2.1/debug/debug.h \
+  /usr/include/c++/4.2.1/debug/debug.h /usr/include/c++/4.2.1/memory \
   /usr/include/c++/4.2.1/bits/allocator.h \
   /usr/include/c++/4.2.1/i686-apple-darwin10/x86_64/bits/c++allocator.h \
   /usr/include/c++/4.2.1/ext/new_allocator.h /usr/include/c++/4.2.1/new \
   /usr/include/c++/4.2.1/exception \
   /usr/include/c++/4.2.1/bits/stl_construct.h \
-  /usr/include/c++/4.2.1/bits/stl_function.h \
-  /usr/include/c++/4.2.1/bits/stl_set.h \
-  /usr/include/c++/4.2.1/bits/stl_multiset.h fnv_hash.h gingko.h \
-  /usr/include/dirent.h /usr/include/sys/dirent.h /usr/include/ftw.h \
-  /usr/include/sys/stat.h /usr/include/sys/uio.h \
-  /usr/include/c++/4.2.1/string /usr/include/c++/4.2.1/bits/char_traits.h \
-  /usr/include/c++/4.2.1/memory \
   /usr/include/c++/4.2.1/bits/stl_uninitialized.h \
   /usr/include/c++/4.2.1/bits/stl_raw_storage_iter.h \
   /usr/include/c++/4.2.1/limits \
   /usr/include/c++/4.2.1/bits/ostream_insert.h \
+  /usr/include/c++/4.2.1/bits/stl_function.h \
   /usr/include/c++/4.2.1/bits/basic_string.h \
   /usr/include/c++/4.2.1/ext/atomicity.h \
   /usr/include/c++/4.2.1/i686-apple-darwin10/x86_64/bits/atomic_word.h \
@@ -88,24 +91,18 @@ gingko_base.o gingko_base.o: gingko_base.cc /usr/include/stdlib.h \
   /usr/include/c++/4.2.1/bits/basic_string.tcc \
   /usr/include/c++/4.2.1/list /usr/include/c++/4.2.1/bits/stl_list.h \
   /usr/include/c++/4.2.1/bits/list.tcc /usr/include/c++/4.2.1/map \
+  /usr/include/c++/4.2.1/bits/stl_tree.h \
   /usr/include/c++/4.2.1/bits/stl_map.h \
-  /usr/include/c++/4.2.1/bits/stl_multimap.h \
+  /usr/include/c++/4.2.1/bits/stl_multimap.h /usr/include/c++/4.2.1/set \
+  /usr/include/c++/4.2.1/bits/stl_set.h \
+  /usr/include/c++/4.2.1/bits/stl_multiset.h \
   /usr/include/c++/4.2.1/vector /usr/include/c++/4.2.1/bits/stl_vector.h \
   /usr/include/c++/4.2.1/bits/stl_bvector.h \
-  /usr/include/c++/4.2.1/bits/vector.tcc ../lib/libevent/event.h \
-  ../lib/libevent/include/event2/event-config.h /usr/include/sys/time.h \
-  ../lib/libevent/evutil.h ../lib/libevent/include/event2/util.h \
-  ../lib/libevent/include/event2/event_struct.h \
-  ../lib/libevent/include/event2/keyvalq_struct.h \
-  ../lib/libevent/include/event2/event.h \
-  ../lib/libevent/include/event2/event_compat.h \
-  ../lib/libevent/include/event2/buffer.h \
-  ../lib/libevent/include/event2/buffer_compat.h \
-  ../lib/libevent/include/event2/bufferevent.h \
-  ../lib/libevent/include/event2/bufferevent_struct.h \
-  ../lib/libevent/include/event2/bufferevent_compat.h \
-  ../lib/libevent/include/event2/tag.h \
-  ../lib/libevent/include/event2/tag_compat.h
+  /usr/include/c++/4.2.1/bits/vector.tcc \
+  ../../../../../../third-64/libevent/include/event.h gingko.h path.h \
+  log.h socket.h limit.h
+
+config.h:
 
 /usr/include/stdlib.h:
 
@@ -215,29 +212,33 @@ gingko_base.o gingko_base.o: gingko_base.cc /usr/include/stdlib.h \
 
 /usr/include/sys/errno.h:
 
+/usr/include/pthread.h:
+
+/usr/include/pthread_impl.h:
+
+/usr/include/sched.h:
+
 /usr/include/fcntl.h:
 
 /usr/include/sys/fcntl.h:
 
-/usr/include/c++/4.2.1/set:
+/usr/include/sys/uio.h:
 
-/usr/include/c++/4.2.1/bits/stl_tree.h:
+../../../../../../third-64/libevent/include/event.h:
 
-/usr/include/c++/4.2.1/bits/stl_algobase.h:
+../../../../../../third-64/libevent/include/event-config.h:
 
-/usr/include/c++/4.2.1/i686-apple-darwin10/x86_64/bits/c++config.h:
+/usr/include/sys/time.h:
 
-/usr/include/c++/4.2.1/i686-apple-darwin10/x86_64/bits/os_defines.h:
+../../../../../../third-64/libevent/include/evutil.h:
 
-/usr/include/c++/4.2.1/i686-apple-darwin10/x86_64/bits/cpu_defines.h:
+hash/xor_hash.h:
 
-/usr/include/c++/4.2.1/cstring:
+hash/../gingko.h:
 
-/usr/include/c++/4.2.1/cstddef:
+/usr/include/dirent.h:
 
-/usr/lib/gcc/i686-apple-darwin10/4.2.1/include/stddef.h:
-
-/usr/include/c++/4.2.1/climits:
+/usr/include/sys/dirent.h:
 
 /usr/lib/gcc/i686-apple-darwin10/4.2.1/include/limits.h:
 
@@ -252,6 +253,40 @@ gingko_base.o gingko_base.o: gingko_base.cc /usr/include/stdlib.h \
 /usr/include/i386/_limits.h:
 
 /usr/include/sys/syslimits.h:
+
+/usr/include/ftw.h:
+
+/usr/include/sys/stat.h:
+
+/usr/include/sys/param.h:
+
+/usr/include/machine/param.h:
+
+/usr/include/i386/param.h:
+
+/usr/include/i386/_param.h:
+
+/usr/include/c++/4.2.1/string:
+
+/usr/include/c++/4.2.1/i686-apple-darwin10/x86_64/bits/c++config.h:
+
+/usr/include/c++/4.2.1/i686-apple-darwin10/x86_64/bits/os_defines.h:
+
+/usr/include/c++/4.2.1/i686-apple-darwin10/x86_64/bits/cpu_defines.h:
+
+/usr/include/c++/4.2.1/bits/stringfwd.h:
+
+/usr/include/c++/4.2.1/bits/char_traits.h:
+
+/usr/include/c++/4.2.1/cstring:
+
+/usr/include/c++/4.2.1/cstddef:
+
+/usr/lib/gcc/i686-apple-darwin10/4.2.1/include/stddef.h:
+
+/usr/include/c++/4.2.1/bits/stl_algobase.h:
+
+/usr/include/c++/4.2.1/climits:
 
 /usr/include/c++/4.2.1/cstdlib:
 
@@ -275,19 +310,11 @@ gingko_base.o gingko_base.o: gingko_base.cc /usr/include/stdlib.h \
 
 /usr/include/c++/4.2.1/i686-apple-darwin10/x86_64/bits/gthr-default.h:
 
-/usr/include/pthread.h:
-
-/usr/include/pthread_impl.h:
-
-/usr/include/sched.h:
-
 /usr/include/c++/4.2.1/cctype:
 
 /usr/include/ctype.h:
 
 /usr/include/runetype.h:
-
-/usr/include/c++/4.2.1/bits/stringfwd.h:
 
 /usr/include/c++/4.2.1/bits/postypes.h:
 
@@ -323,6 +350,8 @@ gingko_base.o gingko_base.o: gingko_base.cc /usr/include/stdlib.h \
 
 /usr/include/c++/4.2.1/debug/debug.h:
 
+/usr/include/c++/4.2.1/memory:
+
 /usr/include/c++/4.2.1/bits/allocator.h:
 
 /usr/include/c++/4.2.1/i686-apple-darwin10/x86_64/bits/c++allocator.h:
@@ -335,32 +364,6 @@ gingko_base.o gingko_base.o: gingko_base.cc /usr/include/stdlib.h \
 
 /usr/include/c++/4.2.1/bits/stl_construct.h:
 
-/usr/include/c++/4.2.1/bits/stl_function.h:
-
-/usr/include/c++/4.2.1/bits/stl_set.h:
-
-/usr/include/c++/4.2.1/bits/stl_multiset.h:
-
-fnv_hash.h:
-
-gingko.h:
-
-/usr/include/dirent.h:
-
-/usr/include/sys/dirent.h:
-
-/usr/include/ftw.h:
-
-/usr/include/sys/stat.h:
-
-/usr/include/sys/uio.h:
-
-/usr/include/c++/4.2.1/string:
-
-/usr/include/c++/4.2.1/bits/char_traits.h:
-
-/usr/include/c++/4.2.1/memory:
-
 /usr/include/c++/4.2.1/bits/stl_uninitialized.h:
 
 /usr/include/c++/4.2.1/bits/stl_raw_storage_iter.h:
@@ -368,6 +371,8 @@ gingko.h:
 /usr/include/c++/4.2.1/limits:
 
 /usr/include/c++/4.2.1/bits/ostream_insert.h:
+
+/usr/include/c++/4.2.1/bits/stl_function.h:
 
 /usr/include/c++/4.2.1/bits/basic_string.h:
 
@@ -393,9 +398,17 @@ gingko.h:
 
 /usr/include/c++/4.2.1/map:
 
+/usr/include/c++/4.2.1/bits/stl_tree.h:
+
 /usr/include/c++/4.2.1/bits/stl_map.h:
 
 /usr/include/c++/4.2.1/bits/stl_multimap.h:
+
+/usr/include/c++/4.2.1/set:
+
+/usr/include/c++/4.2.1/bits/stl_set.h:
+
+/usr/include/c++/4.2.1/bits/stl_multiset.h:
 
 /usr/include/c++/4.2.1/vector:
 
@@ -405,34 +418,14 @@ gingko.h:
 
 /usr/include/c++/4.2.1/bits/vector.tcc:
 
-../lib/libevent/event.h:
+../../../../../../third-64/libevent/include/event.h:
 
-../lib/libevent/include/event2/event-config.h:
+gingko.h:
 
-/usr/include/sys/time.h:
+path.h:
 
-../lib/libevent/evutil.h:
+log.h:
 
-../lib/libevent/include/event2/util.h:
+socket.h:
 
-../lib/libevent/include/event2/event_struct.h:
-
-../lib/libevent/include/event2/keyvalq_struct.h:
-
-../lib/libevent/include/event2/event.h:
-
-../lib/libevent/include/event2/event_compat.h:
-
-../lib/libevent/include/event2/buffer.h:
-
-../lib/libevent/include/event2/buffer_compat.h:
-
-../lib/libevent/include/event2/bufferevent.h:
-
-../lib/libevent/include/event2/bufferevent_struct.h:
-
-../lib/libevent/include/event2/bufferevent_compat.h:
-
-../lib/libevent/include/event2/tag.h:
-
-../lib/libevent/include/event2/tag_compat.h:
+limit.h:

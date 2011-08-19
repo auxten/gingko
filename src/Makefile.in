@@ -32,7 +32,8 @@ POST_INSTALL = :
 NORMAL_UNINSTALL = :
 PRE_UNINSTALL = :
 POST_UNINSTALL = :
-noinst_PROGRAMS = gingko_serv$(EXEEXT) gingko_clnt$(EXEEXT)
+noinst_PROGRAMS = gingko_serv$(EXEEXT) gingko_clnt$(EXEEXT) \
+	serv_unittest$(EXEEXT) clnt_unittest$(EXEEXT)
 subdir = .
 DIST_COMMON = README $(am__configure_deps) $(srcdir)/Makefile.am \
 	$(srcdir)/Makefile.in $(srcdir)/config.h.in \
@@ -49,21 +50,52 @@ CONFIG_HEADER = config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 PROGRAMS = $(noinst_PROGRAMS)
+am_clnt_unittest_OBJECTS = async_threads.$(OBJEXT) \
+	async_conn.$(OBJEXT) gingko_base.$(OBJEXT) path.$(OBJEXT) \
+	log.$(OBJEXT) option.$(OBJEXT) socket.$(OBJEXT) \
+	limit.$(OBJEXT) route.$(OBJEXT) snap.$(OBJEXT) \
+	clnt_unittest.$(OBJEXT) gingko_clnt.$(OBJEXT)
+clnt_unittest_OBJECTS = $(am_clnt_unittest_OBJECTS)
+clnt_unittest_DEPENDENCIES =  \
+	$(srcdir)/../../../../../../third-64/libevent/lib/libevent.a \
+	$(srcdir)/../../../../../../third-64/gtest/lib/libgtest.a \
+	$(srcdir)/hash/libxor_hash.a
+clnt_unittest_LINK = $(CXXLD) $(AM_CXXFLAGS) $(CXXFLAGS) \
+	$(clnt_unittest_LDFLAGS) $(LDFLAGS) -o $@
 am_gingko_clnt_OBJECTS = async_threads.$(OBJEXT) async_conn.$(OBJEXT) \
-	gingko_clnt.$(OBJEXT) gingko_base.$(OBJEXT) md5.$(OBJEXT) \
-	fnv_hash.$(OBJEXT) path.$(OBJEXT) route.$(OBJEXT)
+	gingko_clnt.$(OBJEXT) clnt_main.$(OBJEXT) \
+	gingko_base.$(OBJEXT) path.$(OBJEXT) log.$(OBJEXT) \
+	option.$(OBJEXT) socket.$(OBJEXT) limit.$(OBJEXT) \
+	route.$(OBJEXT) snap.$(OBJEXT)
 gingko_clnt_OBJECTS = $(am_gingko_clnt_OBJECTS)
-gingko_clnt_DEPENDENCIES = $(srcdir)/../lib/libevent/.libs/libevent.a
+gingko_clnt_DEPENDENCIES =  \
+	$(srcdir)/../../../../../../third-64/libevent/lib/libevent.a \
+	$(srcdir)/hash/libxor_hash.a
 gingko_clnt_LINK = $(CXXLD) $(AM_CXXFLAGS) $(CXXFLAGS) \
 	$(gingko_clnt_LDFLAGS) $(LDFLAGS) -o $@
 am_gingko_serv_OBJECTS = async_threads.$(OBJEXT) async_conn.$(OBJEXT) \
-	gingko_serv.$(OBJEXT) gingko_base.$(OBJEXT) \
-	recurse_dir.$(OBJEXT) md5.$(OBJEXT) fnv_hash.$(OBJEXT) \
-	path.$(OBJEXT)
+	gingko_serv.$(OBJEXT) serv_main.$(OBJEXT) \
+	gingko_base.$(OBJEXT) path.$(OBJEXT) log.$(OBJEXT) \
+	option.$(OBJEXT) socket.$(OBJEXT) limit.$(OBJEXT) \
+	seed.$(OBJEXT)
 gingko_serv_OBJECTS = $(am_gingko_serv_OBJECTS)
-gingko_serv_DEPENDENCIES = $(srcdir)/../lib/libevent/.libs/libevent.a
+gingko_serv_DEPENDENCIES =  \
+	$(srcdir)/../../../../../../third-64/libevent/lib/libevent.a \
+	$(srcdir)/hash/libxor_hash.a
 gingko_serv_LINK = $(CXXLD) $(AM_CXXFLAGS) $(CXXFLAGS) \
 	$(gingko_serv_LDFLAGS) $(LDFLAGS) -o $@
+am_serv_unittest_OBJECTS = async_threads.$(OBJEXT) \
+	async_conn.$(OBJEXT) gingko_base.$(OBJEXT) path.$(OBJEXT) \
+	log.$(OBJEXT) option.$(OBJEXT) socket.$(OBJEXT) \
+	limit.$(OBJEXT) seed.$(OBJEXT) xor_hash.$(OBJEXT) \
+	serv_unittest.$(OBJEXT) gingko_serv.$(OBJEXT)
+serv_unittest_OBJECTS = $(am_serv_unittest_OBJECTS)
+serv_unittest_DEPENDENCIES =  \
+	$(srcdir)/../../../../../../third-64/libevent/lib/libevent.a \
+	$(srcdir)/../../../../../../third-64/gtest/lib/libgtest.a \
+	$(srcdir)/hash/libxor_hash.a
+serv_unittest_LINK = $(CXXLD) $(AM_CXXFLAGS) $(CXXFLAGS) \
+	$(serv_unittest_LDFLAGS) $(LDFLAGS) -o $@
 DEFAULT_INCLUDES = -I.@am__isrc@
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
@@ -73,8 +105,10 @@ CXXCOMPILE = $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) \
 CXXLD = $(CXX)
 CXXLINK = $(CXXLD) $(AM_CXXFLAGS) $(CXXFLAGS) $(AM_LDFLAGS) $(LDFLAGS) \
 	-o $@
-SOURCES = $(gingko_clnt_SOURCES) $(gingko_serv_SOURCES)
-DIST_SOURCES = $(gingko_clnt_SOURCES) $(gingko_serv_SOURCES)
+SOURCES = $(clnt_unittest_SOURCES) $(gingko_clnt_SOURCES) \
+	$(gingko_serv_SOURCES) $(serv_unittest_SOURCES)
+DIST_SOURCES = $(clnt_unittest_SOURCES) $(gingko_clnt_SOURCES) \
+	$(gingko_serv_SOURCES) $(serv_unittest_SOURCES)
 RECURSIVE_TARGETS = all-recursive check-recursive dvi-recursive \
 	html-recursive info-recursive install-data-recursive \
 	install-dvi-recursive install-exec-recursive \
@@ -142,12 +176,7 @@ CXX = @CXX@
 CXXDEPMODE = @CXXDEPMODE@
 CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
-
-#gingko_test_clnt_SOURCES=async_threads.cc async_conn.cc gingko_test_clnt.cc \
-#    gingko_base.cc  md5.cc fnv_hash.cc path.cc
-#gingko_test_clnt_LDADD=$(srcdir)/../lib/libevent/.libs/libevent.a
-#gingko_test_clnt_LDFLAGS=-D_GNU_SOURCE -ggdb -funsigned-char
-DEFS = @DEFS@ -D_GNU_SOURCE
+DEFS = -D_GNU_SOURCE -ggdb -funsigned-char
 DEPDIR = @DEPDIR@
 ECHO_C = @ECHO_C@
 ECHO_N = @ECHO_N@
@@ -218,31 +247,62 @@ psdir = @psdir@
 sbindir = @sbindir@
 sharedstatedir = @sharedstatedir@
 srcdir = @srcdir@
+subdirs = @subdirs@
 sysconfdir = @sysconfdir@
 target_alias = @target_alias@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-SUBDIRS = .
-INCLUDES = -I$(srcdir)/src -I$(srcdir)/../lib/libevent \
-    -I$(srcdir)/../lib/libevent/include -I$(srcdir)/../../lib/libevent \
-    -I$(srcdir)/../../lib/libevent/include
+SUBDIRS = hash .
+INCLUDES = -I$(srcdir)/src\
+    -I$(srcdir)/../../../../../third-64/libevent/include \
+    -I$(srcdir)/../../../../../../third-64/libevent/include \
+    -I$(srcdir)/../../../../../../../third-64/libevent/include \
+    -I$(srcdir)/../../../../../third-64/gtest/include \
+    -I$(srcdir)/../../../../../../third-64/gtest/include \
+    -I$(srcdir)/../../../../../../../third-64/gtest/include \
+    -I$(srcdir)/hash \
+    -include config.h
 
-gingko_serv_SOURCES = async_threads.cc async_conn.cc gingko_serv.cc \
-    gingko_base.cc recurse_dir.cc md5.cc fnv_hash.cc path.cc
+clnt_unittest_SOURCES = async_threads.cpp async_conn.cpp \
+    gingko_base.cpp path.cpp log.cpp option.cpp socket.cpp limit.cpp \
+    route.cpp snap.cpp clnt_unittest.cpp gingko_clnt.cpp
 
-gingko_serv_LDADD = $(srcdir)/../lib/libevent/.libs/libevent.a
+clnt_unittest_LDADD = $(srcdir)/../../../../../../third-64/libevent/lib/libevent.a \
+	$(srcdir)/../../../../../../third-64/gtest/lib/libgtest.a \
+    $(srcdir)/hash/libxor_hash.a
+
+clnt_unittest_LDFLAGS = -D_GNU_SOURCE -ggdb -funsigned-char
+serv_unittest_SOURCES = async_threads.cpp async_conn.cpp \
+    gingko_base.cpp path.cpp log.cpp option.cpp socket.cpp limit.cpp \
+    seed.cpp hash/xor_hash.cpp serv_unittest.cpp gingko_serv.cpp
+
+serv_unittest_LDADD = $(srcdir)/../../../../../../third-64/libevent/lib/libevent.a \
+	$(srcdir)/../../../../../../third-64/gtest/lib/libgtest.a \
+    $(srcdir)/hash/libxor_hash.a
+
+serv_unittest_LDFLAGS = -D_GNU_SOURCE -ggdb -funsigned-char
+gingko_serv_SOURCES = async_threads.cpp async_conn.cpp gingko_serv.cpp serv_main.cpp\
+    gingko_base.cpp path.cpp log.cpp option.cpp socket.cpp limit.cpp \
+    seed.cpp 
+
+gingko_serv_LDADD = $(srcdir)/../../../../../../third-64/libevent/lib/libevent.a \
+    $(srcdir)/hash/libxor_hash.a
+
 gingko_serv_LDFLAGS = -D_GNU_SOURCE -ggdb -funsigned-char
-gingko_clnt_SOURCES = async_threads.cc async_conn.cc gingko_clnt.cc \
-    gingko_base.cc  md5.cc fnv_hash.cc path.cc route.cc
+gingko_clnt_SOURCES = async_threads.cpp async_conn.cpp gingko_clnt.cpp clnt_main.cpp\
+    gingko_base.cpp path.cpp log.cpp option.cpp socket.cpp limit.cpp \
+    route.cpp snap.cpp
 
-gingko_clnt_LDADD = $(srcdir)/../lib/libevent/.libs/libevent.a
+gingko_clnt_LDADD = $(srcdir)/../../../../../../third-64/libevent/lib/libevent.a \
+    $(srcdir)/hash/libxor_hash.a
+
 gingko_clnt_LDFLAGS = -D_GNU_SOURCE -ggdb -funsigned-char
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-recursive
 
 .SUFFIXES:
-.SUFFIXES: .cc .o .obj
+.SUFFIXES: .cpp .o .obj
 am--refresh:
 	@:
 $(srcdir)/Makefile.in:  $(srcdir)/Makefile.am  $(am__configure_deps)
@@ -297,12 +357,18 @@ distclean-hdr:
 
 clean-noinstPROGRAMS:
 	-test -z "$(noinst_PROGRAMS)" || rm -f $(noinst_PROGRAMS)
+clnt_unittest$(EXEEXT): $(clnt_unittest_OBJECTS) $(clnt_unittest_DEPENDENCIES) 
+	@rm -f clnt_unittest$(EXEEXT)
+	$(clnt_unittest_LINK) $(clnt_unittest_OBJECTS) $(clnt_unittest_LDADD) $(LIBS)
 gingko_clnt$(EXEEXT): $(gingko_clnt_OBJECTS) $(gingko_clnt_DEPENDENCIES) 
 	@rm -f gingko_clnt$(EXEEXT)
 	$(gingko_clnt_LINK) $(gingko_clnt_OBJECTS) $(gingko_clnt_LDADD) $(LIBS)
 gingko_serv$(EXEEXT): $(gingko_serv_OBJECTS) $(gingko_serv_DEPENDENCIES) 
 	@rm -f gingko_serv$(EXEEXT)
 	$(gingko_serv_LINK) $(gingko_serv_OBJECTS) $(gingko_serv_LDADD) $(LIBS)
+serv_unittest$(EXEEXT): $(serv_unittest_OBJECTS) $(serv_unittest_DEPENDENCIES) 
+	@rm -f serv_unittest$(EXEEXT)
+	$(serv_unittest_LINK) $(serv_unittest_OBJECTS) $(serv_unittest_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -312,28 +378,50 @@ distclean-compile:
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/async_conn.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/async_threads.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/fnv_hash.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/clnt_main.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/clnt_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/gingko_base.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/gingko_clnt.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/gingko_serv.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/md5.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/limit.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/log.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/option.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/path.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/recurse_dir.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/route.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/seed.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/serv_main.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/serv_unittest.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/snap.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/socket.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xor_hash.Po@am__quote@
 
-.cc.o:
+.cpp.o:
 @am__fastdepCXX_TRUE@	$(CXXCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
 @am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(CXXCOMPILE) -c -o $@ $<
 
-.cc.obj:
+.cpp.obj:
 @am__fastdepCXX_TRUE@	$(CXXCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ `$(CYGPATH_W) '$<'`
 @am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/$*.Tpo $(DEPDIR)/$*.Po
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='$<' object='$@' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(CXXCOMPILE) -c -o $@ `$(CYGPATH_W) '$<'`
+
+xor_hash.o: hash/xor_hash.cpp
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT xor_hash.o -MD -MP -MF $(DEPDIR)/xor_hash.Tpo -c -o xor_hash.o `test -f 'hash/xor_hash.cpp' || echo '$(srcdir)/'`hash/xor_hash.cpp
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/xor_hash.Tpo $(DEPDIR)/xor_hash.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='hash/xor_hash.cpp' object='xor_hash.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o xor_hash.o `test -f 'hash/xor_hash.cpp' || echo '$(srcdir)/'`hash/xor_hash.cpp
+
+xor_hash.obj: hash/xor_hash.cpp
+@am__fastdepCXX_TRUE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT xor_hash.obj -MD -MP -MF $(DEPDIR)/xor_hash.Tpo -c -o xor_hash.obj `if test -f 'hash/xor_hash.cpp'; then $(CYGPATH_W) 'hash/xor_hash.cpp'; else $(CYGPATH_W) '$(srcdir)/hash/xor_hash.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(am__mv) $(DEPDIR)/xor_hash.Tpo $(DEPDIR)/xor_hash.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='hash/xor_hash.cpp' object='xor_hash.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o xor_hash.obj `if test -f 'hash/xor_hash.cpp'; then $(CYGPATH_W) 'hash/xor_hash.cpp'; else $(CYGPATH_W) '$(srcdir)/hash/xor_hash.cpp'; fi`
 
 # This directory's subdirectories are mostly independent; you can cd
 # into them and run `make' without going through this Makefile.

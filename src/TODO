@@ -6,8 +6,8 @@
 # find port to listen
 # strerror strerror_r必要？
 # 跨文件的数据块校验失败
-#libevent读文件event_init event_base_del效率低 也许select更好 增大块大小可以缓解
-# 多线程fnv_hash
+# libevent读文件event_init event_base_del效率低 也许select更好 增大块大小可以缓解
+# 多线程xor_hash
 # shutdown socket
 # socket 超时
 # 最后请求server
@@ -16,7 +16,145 @@
 # 限速
 # not ready_to_serv host set保存host
 # 获得可用源就不再去请求server
-心跳监测
-退出任务广播
-单文件支持
-getopt_long()
+# client 线程数限制，find no client slot what response？
+# 心跳监测
+# 路径处理，目的文件夹不存在
+# server到不了 就会hang 
+# help函数
+# SO_RCVBUF
+# option pool大小
+# quit_job_s 如果host不在的逻辑
+# serv pool 满了的心跳检测
+# 退出任务广播
+# 单文件支持
+# join 超时探测
+# join 进度传递
+# getopt_long()
+# 续传
+# 在sheldon上 recv 的 MSG_WAITALL 貌似不起作用
+# xor_hash过程中 job erase 导致core https://computing.llnl.gov/tutorials/pthreads/man/pthread_setcanceltype.txt
+# 迁移到libev？
+# 异常文件处理
+# job—state
+# client日志默认输出至stderr
+# client正常退出打印一条日志
+# client做种时间可以配置
+# 续传模式在目的文件被mv走可能引发的bug
+# sig handler
+
+dead不彻底摘除 增加时延 pthread_cancel 用时◎◎◎
+做种限速
+
+
+路径通配符
+Server单点消除
+源路径是软链接
+流式P2P
+job 过期
+# xor_hash int 读提速 没有作用
+# sep_arg 返回值检查
+# JOIN 不存在的目录引发 clnt core
+
+###############profile###############
+Flat profile:
+
+Each sample counts as 0.01 seconds.
+  %   cumulative   self              self     total
+ time   seconds   seconds    calls  ms/call  ms/call  name
+ 98.27      0.85     0.85      213     3.97     3.97  digest_ok(void*, _s_block*)
+  1.16      0.86     0.01                             vnode_download(void*)
+  0.58      0.86     0.01      175     0.03     0.03  writeblock(_s_job*, unsigned char const*, _s_block*)
+  0.00      0.86     0.00      159     0.00     0.00  bw_down_limit(int)
+  0.00      0.86     0.00       62     0.00     0.00  ev_fn_write(int, short, void*)
+  0.00      0.86     0.00       62     0.00     0.00  gethostname_my(char const*, hostent*, char**, unsigned long)
+  0.00      0.86     0.00       62     0.00     0.00  sendall(int, void const*, int, int)
+  0.00      0.86     0.00       61     0.00     0.00  connect_host(_s_host*, int, int)
+  0.00      0.86     0.00       61     0.00     0.00  sep_arg(char*, char**, int)
+  0.00      0.86     0.00       59     0.00    13.12  get_blocks_c(_s_host*, long, long, unsigned char, char*)
+  0.00      0.86     0.00       54     0.00     0.00  close_socket(int)
+  0.00      0.86     0.00       54     0.00     0.00  cmpByDistance(_s_host const&, _s_host const&)
+  0.00      0.86     0.00       45     0.00     0.00  operator==(_s_host const&, _s_host const&)
+  0.00      0.86     0.00       36     0.00     0.00  __gnu_cxx::__normal_iterator<_s_host*, std::vector<_s_host, std::allocator<_s_host> > > std::__find<__gnu_cxx::__normal_iterator<_s_host*, std::vector<_s_host, std::allocator<_s_host> > >, _s_host>(__gnu_cxx::__normal_iterator<_s_host*, std::vector<_s_host, std::allocator<_s_host> > >, __gnu_cxx::__normal_iterator<_s_host*, std::vector<_s_host, std::allocator<_s_host> > >, _s_host const&, std::random_access_iterator_tag)
+  0.00      0.86     0.00       27     0.00    19.34  decide_src(_s_job*, int, long, std::vector<_s_host, std::allocator<_s_host> >*, _s_host*)
+  0.00      0.86     0.00       27     0.00     0.00  get_blk_src(_s_job*, int, long, std::vector<_s_host, std::allocator<_s_host> >*)
+  0.00      0.86     0.00       20     0.00     0.00  thread_worker_new(int)
+  0.00      0.86     0.00       19     0.00     0.00  gettimestr(char*)
+  0.00      0.86     0.00       19     0.00     0.00  gko_log(WARNING, char const*, ...)
+  0.00      0.86     0.00       18     0.00     0.00  std::_Rb_tree<_s_host, _s_host, std::_Identity<_s_host>, std::less<_s_host>, std::allocator<_s_host> >::_M_insert_unique(_s_host const&)
+  0.00      0.86     0.00       12     0.00     0.00  conn_client_clear(conn_client*)
+  0.00      0.86     0.00        9     0.00     0.00  conn_client_free(conn_client*)
+  0.00      0.86     0.00        9     0.00     0.00  conn_tcp_server_on_data(int, short, void*)
+  0.00      0.86     0.00        9     0.00     0.00  parse_req(char*)
+  0.00      0.86     0.00        9     0.00     0.00  std::vector<_s_host, std::allocator<_s_host> >::_M_insert_aux(__gnu_cxx::__normal_iterator<_s_host*, std::vector<_s_host, std::allocator<_s_host> > >, _s_host const&)
+  0.00      0.86     0.00        8     0.00     0.00  conn_send_data(int, void*, unsigned int)
+  0.00      0.86     0.00        8     0.00     0.00  std::_Rb_tree<_s_host, _s_host, std::_Identity<_s_host>, std::less<_s_host>, std::allocator<_s_host> >::_M_insert_(std::_Rb_tree_node_base const*, std::_Rb_tree_node_base const*, _s_host const&)
+  0.00      0.86     0.00        7     0.00     0.00  conn_setnonblock(int)
+  0.00      0.86     0.00        6     0.00     0.00  sendblocks(int, _s_job*, long, long)
+  0.00      0.86     0.00        6     0.00     0.00  get_blocks_s(void*, int)
+  0.00      0.86     0.00        6     0.00     0.00  add_new_conn_client(int)
+  0.00      0.86     0.00        6     0.00     0.00  conn_client_list_get(int)
+  0.00      0.86     0.00        6     0.00     0.00  thread_list_find_next()
+  0.00      0.86     0.00        6     0.00     0.00  thread_worker_process(int, short, void*)
+  0.00      0.86     0.00        6     0.00     0.00  conn_tcp_server_accept(int, short, void*)
+  0.00      0.86     0.00        6     0.00     0.00  thread_worker_dispatch(int)
+  0.00      0.86     0.00        6     0.00     0.00  host_hash(_s_job*, _s_host const*, _s_host_hash_result*, char)
+  0.00      0.86     0.00        5     0.00     0.00  inplace_strip_tailing_slash(char*)
+  0.00      0.86     0.00        4     0.00     0.00  std::_Rb_tree<_s_host, _s_host, std::_Identity<_s_host>, std::less<_s_host>, std::allocator<_s_host> >::erase(_s_host const&)
+  0.00      0.86     0.00        3     0.00     0.00  std::_Rb_tree<_s_host, _s_host, std::_Identity<_s_host>, std::less<_s_host>, std::allocator<_s_host> >::_M_erase(std::_Rb_tree_node<_s_host>*)
+  0.00      0.86     0.00        2     0.00     0.00  merge_path(char*, char const*, char const*)
+  0.00      0.86     0.00        2     0.00     0.00  new_host_s(void*, int)
+  0.00      0.86     0.00        2     0.00     0.00  inplace_change_path(char*, char const*, char const*)
+  0.00      0.86     0.00        2     0.00     0.00  base_name(char*, char const*)
+
+  Flat profile:
+Each sample counts as 0.01 seconds.
+  %   cumulative   self              self     total
+ time   seconds   seconds    calls  ms/call  ms/call  name
+100.01      2.05     2.05      596     3.44     3.44  xor_hash_file(unsigned int, _IO_FILE*, long*, unsigned long*, unsigned char*)
+  0.00      2.05     0.00     3054     0.00     0.00  conn_client_free(conn_client*)
+  0.00      2.05     0.00     1474     0.00     0.00  ev_fn_gsendfile(int, short, void*)
+  0.00      2.05     0.00      248     0.00     0.00  sendfileall(int, int, long*, unsigned long*)
+  0.00      2.05     0.00      107     0.00     0.00  conn_client_clear(conn_client*)
+  0.00      2.05     0.00       62     0.00     0.00  sendall(int, void const*, int, int)
+  0.00      2.05     0.00       61     0.00     0.00  ev_fn_write(int, short, void*)
+  0.00      2.05     0.00       55     0.00     0.00  conn_setnonblock(int)
+  0.00      2.05     0.00       54     0.00     0.00  conn_send_data(int, void*, unsigned int)
+  0.00      2.05     0.00       54     0.00     0.00  add_new_conn_client(int)
+  0.00      2.05     0.00       54     0.00     0.00  conn_client_list_get(int)
+  0.00      2.05     0.00       54     0.00     0.00  thread_list_find_next()
+  0.00      2.05     0.00       54     0.00     0.00  thread_worker_process(int, short, void*)
+  0.00      2.05     0.00       54     0.00     0.00  thread_worker_dispatch(int)
+  0.00      2.05     0.00       54     0.00     0.00  conn_tcp_server_on_data(int, short, void*)
+  0.00      2.05     0.00       53     0.00     0.00  conn_tcp_server_accept(int, short, void*)
+  0.00      2.05     0.00       53     0.00     0.00  parse_req(char*)
+  0.00      2.05     0.00       52     0.00     0.00  sep_arg(char*, char**, int)
+  0.00      2.05     0.00       48     0.00     0.00  sendblocks(int, _s_job*, long, long)
+  0.00      2.05     0.00       48     0.00     0.00  get_blocks_s(void*, int)
+  0.00      2.05     0.00       20     0.00     0.00  thread_worker_new(int)  
+  0.00      2.05     0.00        5     0.00     0.00  connect_host(_s_host*, int, int)
+  0.00      2.05     0.00        5     0.00     0.00  gethostname_my(char const*, hostent*, char**, unsigned long)  
+  0.00      2.05     0.00        5     0.00     0.00  sendcmd(_s_host*, char const*, int, int)
+  0.00      2.05     0.00        4     0.00     0.00  close_socket(int)
+  0.00      2.05     0.00        2     0.00     0.00  join_job_s(void*, int)
+  0.00      2.05     0.00        2     0.00     0.00  quit_job_s(void*, int)
+  0.00      2.05     0.00        2     0.00     0.00  helo_serv_s(void*, int)
+  0.00      2.05     0.00        2     0.00     0.00  broadcast_join(_s_host*, _s_host*)
+  0.00      2.05     0.00        2     0.00     0.00  std::_Rb_tree<_s_host, _s_host, std::_Identity<_s_host>, std::less<_s_host>, std::allocator<_s_host> >::_M_insert_(std::_Rb_tree_node_base const*, std::_Rb_tree_node_base const*, _s_host const&)
+  0.00      2.05     0.00        2     0.00     0.00  std::_Rb_tree<_s_host, _s_host, std::_Identity<_s_host>, std::less<_s_host>, std::allocator<_s_host> >::erase(_s_host const&)
+  0.00      2.05     0.00        2     0.00     0.00  std::_Rb_tree<_s_host, _s_host, std::_Identity<_s_host>, std::less<_s_host>, std::allocator<_s_host> >::_M_erase(std::_Rb_tree_node<_s_host>*)
+  0.00      2.05     0.00        2     0.00     0.00  std::_Rb_tree<std::string, std::pair<std::string const, _s_job>, std::_Select1st<std::pair<std::string const, _s_job> >, std::less<std::string>, std::allocator<std::pair<std::string const, _s_job> > >::_M_erase(std::_Rb_tree_node<std::pair<std::string const, _s_job> >*)
+  0.00      2.05     0.00        1     0.00     0.00  global constructors keyed to grand_lock
+  0.00      2.05     0.00        1     0.00     0.00  conn_close()
+  0.00      2.05     0.00        1     0.00     0.00  recurse_dir(_s_job*)  
+  0.00      2.05     0.00        1     0.00     0.00  thread_init()
+  0.00      2.05     0.00        1     0.00     0.00  xor_hash_all(_s_job*, long)
+  0.00      2.05     0.00        1     0.00     0.00  get_file_count(char const*)
+  0.00      2.05     0.00        1     0.00     0.00  conn_tcp_server(conn_server*)  
+  0.00      2.05     0.00        1     0.00     0.00  conn_client_list_init()  
+  0.00      2.05     0.00        1     0.00     0.00  set_sig()  
+  0.00      2.05     0.00        1     0.00     0.00  base_init()
+  0.00      2.05     0.00        1     0.00     0.00  erase_job(std::string&)  
+  0.00      2.05     0.00        1     0.00     0.00  std::_Rb_tree<std::string, std::pair<std::string const, _s_job>, std::_Select1st<std::pair<std::string const, _s_job> >, std::less<std::string>, std::allocator<std::pair<std::string const, _s_job> > >::_M_insert_(std::_Rb_tree_node_base const*, std::_Rb_tree_node_base const*, std::pair<std::string const, _s_job> const&)  
+  0.00      2.05     0.00        1     0.00     0.00  std::_Rb_tree<std::string, std::pair<std::string const, _s_job>, std::_Select1st<std::pair<std::string const, _s_job> >, std::less<std::string>, std::allocator<std::pair<std::string const, _s_job> > >::_M_insert_unique(std::pair<std::string const, _s_job> const&)
+  0.00      2.05     0.00        1     0.00     0.00  std::_Rb_tree<std::string, std::pair<std::string const, _s_job>, std::_Select1st<std::pair<std::string const, _s_job> >, std::less<std::string>, std::allocator<std::pair<std::string 
+  

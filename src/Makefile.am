@@ -1,24 +1,45 @@
-SUBDIRS = .
-INCLUDES = -I$(srcdir)/src -I$(srcdir)/../lib/libevent \
-    -I$(srcdir)/../lib/libevent/include -I$(srcdir)/../../lib/libevent \
-    -I$(srcdir)/../../lib/libevent/include
+SUBDIRS = hash .
+INCLUDES = -I$(srcdir)/src\
+    -I$(srcdir)/../../../../../third-64/libevent/include \
+    -I$(srcdir)/../../../../../../third-64/libevent/include \
+    -I$(srcdir)/../../../../../../../third-64/libevent/include \
+    -I$(srcdir)/../../../../../third-64/gtest/include \
+    -I$(srcdir)/../../../../../../third-64/gtest/include \
+    -I$(srcdir)/../../../../../../../third-64/gtest/include \
+    -I$(srcdir)/hash \
+    -include config.h
 export INCLUDES
 
-noinst_PROGRAMS=gingko_serv gingko_clnt #gingko_test_clnt
+noinst_PROGRAMS=gingko_serv gingko_clnt serv_unittest clnt_unittest
 
-gingko_serv_SOURCES=async_threads.cc async_conn.cc gingko_serv.cc \
-    gingko_base.cc recurse_dir.cc md5.cc fnv_hash.cc path.cc
-gingko_serv_LDADD=$(srcdir)/../lib/libevent/.libs/libevent.a
+clnt_unittest_SOURCES=async_threads.cpp async_conn.cpp \
+    gingko_base.cpp path.cpp log.cpp option.cpp socket.cpp limit.cpp \
+    route.cpp snap.cpp clnt_unittest.cpp gingko_clnt.cpp
+clnt_unittest_LDADD=$(srcdir)/../../../../../../third-64/libevent/lib/libevent.a \
+	$(srcdir)/../../../../../../third-64/gtest/lib/libgtest.a \
+    $(srcdir)/hash/libxor_hash.a
+clnt_unittest_LDFLAGS=-D_GNU_SOURCE -ggdb -funsigned-char
+
+serv_unittest_SOURCES=async_threads.cpp async_conn.cpp \
+    gingko_base.cpp path.cpp log.cpp option.cpp socket.cpp limit.cpp \
+    seed.cpp hash/xor_hash.cpp serv_unittest.cpp gingko_serv.cpp
+serv_unittest_LDADD=$(srcdir)/../../../../../../third-64/libevent/lib/libevent.a \
+	$(srcdir)/../../../../../../third-64/gtest/lib/libgtest.a \
+    $(srcdir)/hash/libxor_hash.a
+serv_unittest_LDFLAGS=-D_GNU_SOURCE -ggdb -funsigned-char
+
+gingko_serv_SOURCES=async_threads.cpp async_conn.cpp gingko_serv.cpp serv_main.cpp\
+    gingko_base.cpp path.cpp log.cpp option.cpp socket.cpp limit.cpp \
+    seed.cpp 
+gingko_serv_LDADD=$(srcdir)/../../../../../../third-64/libevent/lib/libevent.a \
+    $(srcdir)/hash/libxor_hash.a
 gingko_serv_LDFLAGS=-D_GNU_SOURCE -ggdb -funsigned-char
 
-gingko_clnt_SOURCES=async_threads.cc async_conn.cc gingko_clnt.cc \
-    gingko_base.cc  md5.cc fnv_hash.cc path.cc route.cc
-gingko_clnt_LDADD=$(srcdir)/../lib/libevent/.libs/libevent.a
+gingko_clnt_SOURCES=async_threads.cpp async_conn.cpp gingko_clnt.cpp clnt_main.cpp\
+    gingko_base.cpp path.cpp log.cpp option.cpp socket.cpp limit.cpp \
+    route.cpp snap.cpp
+gingko_clnt_LDADD=$(srcdir)/../../../../../../third-64/libevent/lib/libevent.a \
+    $(srcdir)/hash/libxor_hash.a
 gingko_clnt_LDFLAGS=-D_GNU_SOURCE -ggdb -funsigned-char
 
-#gingko_test_clnt_SOURCES=async_threads.cc async_conn.cc gingko_test_clnt.cc \
-#    gingko_base.cc  md5.cc fnv_hash.cc path.cc
-#gingko_test_clnt_LDADD=$(srcdir)/../lib/libevent/.libs/libevent.a
-#gingko_test_clnt_LDFLAGS=-D_GNU_SOURCE -ggdb -funsigned-char
-
-DEFS+=-D_GNU_SOURCE
+DEFS=-D_GNU_SOURCE -ggdb -funsigned-char

@@ -52,9 +52,6 @@
 #include "job_state.h"
 #include "gingko_clnt.h"
 
-#include "gtest/gtest.h"
-#include "unittest.h"
-
 
 /************** PTHREAD STUFF **************/
 ///default pthread_attr_t
@@ -76,6 +73,9 @@ s_job_t g_job;
 s_gingko_global_t gko;
 
 #ifdef UNITTEST
+
+#include "gtest/gtest.h"
+#include "unittest.h"
 
 /************** FUNC DICT **************/
 #include "gingko_common.h"

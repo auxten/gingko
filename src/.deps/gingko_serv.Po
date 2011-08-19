@@ -1,5 +1,5 @@
-gingko_serv.o gingko_serv.o: gingko_serv.cc /usr/include/stdio.h \
-  /usr/include/_types.h /usr/include/sys/_types.h \
+gingko_serv.o gingko_serv.o: gingko_serv.cpp config.h \
+  /usr/include/stdio.h /usr/include/_types.h /usr/include/sys/_types.h \
   /usr/include/sys/cdefs.h /usr/include/machine/_types.h \
   /usr/include/i386/_types.h /usr/include/stdlib.h \
   /usr/include/Availability.h /usr/include/AvailabilityInternal.h \
@@ -87,26 +87,23 @@ gingko_serv.o gingko_serv.o: gingko_serv.cc /usr/include/stdio.h \
   /usr/include/c++/4.2.1/bits/basic_string.tcc \
   /usr/include/c++/4.2.1/list /usr/include/c++/4.2.1/bits/stl_list.h \
   /usr/include/c++/4.2.1/bits/list.tcc gingko.h /usr/include/dirent.h \
-  /usr/include/sys/dirent.h /usr/include/ftw.h /usr/include/c++/4.2.1/set \
+  /usr/include/sys/dirent.h /usr/include/ftw.h /usr/include/sys/param.h \
+  /usr/include/machine/param.h /usr/include/i386/param.h \
+  /usr/include/i386/_param.h /usr/include/c++/4.2.1/set \
   /usr/include/c++/4.2.1/bits/stl_set.h \
   /usr/include/c++/4.2.1/bits/stl_multiset.h \
   /usr/include/c++/4.2.1/vector /usr/include/c++/4.2.1/bits/stl_vector.h \
   /usr/include/c++/4.2.1/bits/stl_bvector.h \
-  /usr/include/c++/4.2.1/bits/vector.tcc ../lib/libevent/event.h \
-  ../lib/libevent/include/event2/event-config.h /usr/include/sys/time.h \
-  ../lib/libevent/evutil.h ../lib/libevent/include/event2/util.h \
-  ../lib/libevent/include/event2/event_struct.h \
-  ../lib/libevent/include/event2/keyvalq_struct.h \
-  ../lib/libevent/include/event2/event.h \
-  ../lib/libevent/include/event2/event_compat.h \
-  ../lib/libevent/include/event2/buffer.h \
-  ../lib/libevent/include/event2/buffer_compat.h \
-  ../lib/libevent/include/event2/bufferevent.h \
-  ../lib/libevent/include/event2/bufferevent_struct.h \
-  ../lib/libevent/include/event2/bufferevent_compat.h \
-  ../lib/libevent/include/event2/tag.h \
-  ../lib/libevent/include/event2/tag_compat.h async_pool.h fnv_hash.h \
-  path.h gingko_common.h
+  /usr/include/c++/4.2.1/bits/vector.tcc \
+  ../../../../../../third-64/libevent/include/event.h \
+  ../../../../../../third-64/libevent/include/event-config.h \
+  /usr/include/sys/time.h \
+  ../../../../../../third-64/libevent/include/evutil.h async_pool.h \
+  hash/xor_hash.h hash/../gingko.h \
+  ../../../../../../third-64/libevent/include/event.h path.h log.h seed.h \
+  socket.h option.h job_state.h
+
+config.h:
 
 /usr/include/stdio.h:
 
@@ -390,6 +387,14 @@ gingko.h:
 
 /usr/include/ftw.h:
 
+/usr/include/sys/param.h:
+
+/usr/include/machine/param.h:
+
+/usr/include/i386/param.h:
+
+/usr/include/i386/_param.h:
+
 /usr/include/c++/4.2.1/set:
 
 /usr/include/c++/4.2.1/bits/stl_set.h:
@@ -404,42 +409,30 @@ gingko.h:
 
 /usr/include/c++/4.2.1/bits/vector.tcc:
 
-../lib/libevent/event.h:
+../../../../../../third-64/libevent/include/event.h:
 
-../lib/libevent/include/event2/event-config.h:
+../../../../../../third-64/libevent/include/event-config.h:
 
 /usr/include/sys/time.h:
 
-../lib/libevent/evutil.h:
-
-../lib/libevent/include/event2/util.h:
-
-../lib/libevent/include/event2/event_struct.h:
-
-../lib/libevent/include/event2/keyvalq_struct.h:
-
-../lib/libevent/include/event2/event.h:
-
-../lib/libevent/include/event2/event_compat.h:
-
-../lib/libevent/include/event2/buffer.h:
-
-../lib/libevent/include/event2/buffer_compat.h:
-
-../lib/libevent/include/event2/bufferevent.h:
-
-../lib/libevent/include/event2/bufferevent_struct.h:
-
-../lib/libevent/include/event2/bufferevent_compat.h:
-
-../lib/libevent/include/event2/tag.h:
-
-../lib/libevent/include/event2/tag_compat.h:
+../../../../../../third-64/libevent/include/evutil.h:
 
 async_pool.h:
 
-fnv_hash.h:
+hash/xor_hash.h:
+
+hash/../gingko.h:
+
+../../../../../../third-64/libevent/include/event.h:
 
 path.h:
 
-gingko_common.h:
+log.h:
+
+seed.h:
+
+socket.h:
+
+option.h:
+
+job_state.h:

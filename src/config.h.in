@@ -1,7 +1,10 @@
 /* config.h.in.  Generated from configure.in by autoheader.  */
 
 /* Debug Mode */
-#undef DEBUG
+#undef GKO_DEBUG
+
+/* Profile Mode */
+#undef GPROFILE
 
 /* Define to 1 if you have the <arpa/inet.h> header file. */
 #undef HAVE_ARPA_INET_H
@@ -82,7 +85,22 @@
 #undef HAVE_WORKING_VFORK
 
 /* No-debug Mode */
-#undef NDEBUG
+#undef NGKO_DEBUG
+
+/* No-gprofile Mode */
+#undef NGPROFILE
+
+/* No-O3 Mode */
+#undef NO3
+
+/* No-profile Mode */
+#undef NPROFILE
+
+/* No-unittest Mode */
+#undef NUNITTEST
+
+/* O3 Mode */
+#undef O3
 
 /* Name of package */
 #undef PACKAGE
@@ -105,8 +123,14 @@
 /* Define to the version of this package. */
 #undef PACKAGE_VERSION
 
+/* Profile Mode */
+#undef PROFILE
+
 /* Define to 1 if you have the ANSI C header files. */
 #undef STDC_HEADERS
+
+/* Unittest Mode */
+#undef UNITTEST
 
 /* Version number of package */
 #undef VERSION

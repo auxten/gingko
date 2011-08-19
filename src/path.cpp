@@ -11,8 +11,6 @@
 #include "log.h"
 #include "path.h"
 
-#include "gtest/gtest.h"
-
 /**
  * @brief  ../path////   TO  ../path
  * @brief  ../path/     TO  ../path
