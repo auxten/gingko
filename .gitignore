@@ -1,9 +1,9 @@
 .deps/
 clnt_unittest
 serv_unittest
-config.h.in
-config.status
+config.h
 config.log
+config.status
 *.tar.gz
 src/hash/Makefile
 src/Makefile
