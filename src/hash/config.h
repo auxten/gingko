@@ -2,7 +2,7 @@
 /* config.h.in.  Generated from configure.in by autoheader.  */
 
 /* Debug Mode */
-/* #undef GKO_DEBUG */
+/* #undef DEBUG */
 
 /* Profile Mode */
 /* #undef GPROFILE */
@@ -86,7 +86,7 @@
 #define HAVE_WORKING_VFORK 1
 
 /* No-debug Mode */
-#define NGKO_DEBUG /**/
+#define NDEBUG /**/
 
 /* No-gprofile Mode */
 #define NGPROFILE /**/
@@ -97,26 +97,23 @@
 /* No-profile Mode */
 #define NPROFILE /**/
 
-/* No-unittest Mode */
-/* #undef NUNITTEST */
-
 /* O3 Mode */
 /* #undef O3 */
 
 /* Name of package */
-#define PACKAGE "libxor_hash.a,gingko_serv,gingko_clnt,unittest"
+#define PACKAGE "libxor_hash.a"
 
 /* Define to the address where bug reports for this package should be sent. */
 #define PACKAGE_BUGREPORT "blog.auxten.com"
 
 /* Define to the full name of this package. */
-#define PACKAGE_NAME "libxor_hash.a,gingko_serv,gingko_clnt,unittest"
+#define PACKAGE_NAME "libxor_hash.a"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "libxor_hash.a,gingko_serv,gingko_clnt,unittest 3.14"
+#define PACKAGE_STRING "libxor_hash.a 3.14"
 
 /* Define to the one symbol short name of this package. */
-#define PACKAGE_TARNAME "libxor_hash-a-gingko_serv-gingko_clnt-unittest"
+#define PACKAGE_TARNAME "libxor_hash-a"
 
 /* Define to the home page for this package. */
 #define PACKAGE_URL ""
@@ -129,9 +126,6 @@
 
 /* Define to 1 if you have the ANSI C header files. */
 #define STDC_HEADERS 1
-
-/* Unittest Mode */
-#define UNITTEST /**/
 
 /* Version number of package */
 #define VERSION "3.14"
