@@ -22,6 +22,10 @@ NOTE：
 with some MACRO, I know this is ugly, but the bins compiled out work well...so, let it
 be.
 
+DEPS:
+    libevent
+    gtest (when ./configure --enable-unittest)
+
 auxtenwpc@gmail.com
 -EOF-                                 
 
