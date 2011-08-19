@@ -1,4 +1,5 @@
-currently p2p algorithm is almost complete
+currently p2p algorithm is complete, could be used for data transfer
+usage see --help
   ____ _             _         
  / ___(_)_ __   __ _| | _____  
 | |  _| | '_ \ / _` | |/ / _ \ 
