@@ -1,3 +1,4 @@
+svn-commit.*
 .deps/
 clnt_unittest
 serv_unittest
