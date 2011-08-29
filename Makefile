@@ -19,3 +19,4 @@ move:
 	mv ./src/gingko_clnt ./output/	
 	mv ./src/serv_unittest ./output/	
 	mv ./src/clnt_unittest ./output/	
+	mv ./src/erase_job.py ./output/

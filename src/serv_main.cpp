@@ -57,7 +57,7 @@ using namespace std;
 
 /************** PTHREAD STUFF **************/
 ///server wide lock
-pthread_rwlock_t g_grand_lock;
+pthread_mutex_t g_grand_lock;
 ///job specific lock
 s_lock_t g_job_lock[MAX_JOBS];
 pthread_key_t g_dir_key;
@@ -148,11 +148,11 @@ GKO_STATIC_FUNC int init_daemon(void)
 GKO_STATIC_FUNC inline void pthread_init()
 {
     pthread_key_create(&g_dir_key, NULL);
-    pthread_rwlock_init(&g_grand_lock, NULL);
+    pthread_mutex_init(&g_grand_lock, NULL);
     for (int i = 0; i < MAX_JOBS; i++)
     {
         g_job_lock[i].state = LK_FREE;
-        pthread_rwlock_init(&(g_job_lock[i].lock), NULL);
+        pthread_mutex_init(&(g_job_lock[i].lock), NULL);
     }
     return;
 }
@@ -169,9 +169,9 @@ GKO_STATIC_FUNC inline void pthread_clean()
 {
     for (int i = 0; i < MAX_JOBS; i++)
     {
-        pthread_rwlock_destroy(&(g_job_lock[i].lock));
+        pthread_mutex_destroy(&(g_job_lock[i].lock));
     }
-    pthread_rwlock_destroy(&g_grand_lock);
+    pthread_mutex_destroy(&g_grand_lock);
     pthread_key_delete(g_dir_key);
     return;
 }
@@ -234,6 +234,11 @@ GKO_STATIC_FUNC int gingko_serv_global_init(int argc, char *argv[])
     }
     umask(0);
 
+    if(check_ulimit() != 0)
+    {
+        return -1;
+    }
+
     if (init_daemon())
     {
         gko_log(FATAL, "init_daemon failed");
@@ -246,6 +251,8 @@ GKO_STATIC_FUNC int gingko_serv_global_init(int argc, char *argv[])
     gko.ready_to_serv = 1;
     gko.cmd_list_p = g_cmd_list;
     gko.func_list_p = g_func_list_s;
+    gko.sig_flag = 0;
+
     return 0;
 }
 
@@ -263,12 +270,14 @@ int main(int argc, char *argv[])
     if(gingko_serv_global_init(argc, argv))
     {
         gko_log(FATAL, "gingko_serv_global_init failed");
+        fprintf(stderr, "Server error, quited\n");
         exit(1);
     }
     pthread_init();
     if (sig_watcher(serv_int_worker))
     {
         gko_log(FATAL, "signal watcher start error");
+        fprintf(stderr, "Server error, quited\n");
         exit(1);
     }
     gingko_serv_async_server();

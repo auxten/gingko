@@ -20,15 +20,5 @@
  * @date 2011-8-1
  **/
 int erase_job(std::string &uri_string);
-/**
- * @brief send the NEWW to all related clients
- *
- * @see
- * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
- * @date 2011-8-1
- **/
-int broadcast_join(s_host_t * host_array, s_host_t *h);
-
 
 #endif /* GINGKO_SERV_H_ */

@@ -58,6 +58,7 @@ char * gettimestr(char * time)
  **/
 void gko_log(const u_char log_level, const char *fmt, ...)
 {
+    int errnum = errno;
     va_list args;
     va_start(args, fmt);
     char logstr[256];
@@ -67,7 +68,7 @@ void gko_log(const u_char log_level, const char *fmt, ...)
         gko.log_fp = fopen(gko.opt.logpath, "a+");
         if(! gko.log_fp)
         {
-            fprintf(stderr, "cann't open log file %s, see help", gko.opt.logpath);
+            perror("Cann't open log file");
             exit(1);
         }
     }
@@ -79,7 +80,7 @@ void gko_log(const u_char log_level, const char *fmt, ...)
     {
         snprintf(logstr + strlen(logstr), sizeof(logstr) - strlen(logstr),
                 "; #");
-        strerror_r(errno, logstr + strlen(logstr),
+        strerror_r(errnum, logstr + strlen(logstr),
                 sizeof(logstr) - strlen(logstr));
     }
     fprintf(gko.log_fp, "%s\n", logstr);

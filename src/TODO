@@ -41,8 +41,11 @@
 # client做种时间可以配置
 # 续传模式在目的文件被mv走可能引发的bug
 # sig handler
+# dead不彻底摘除 增加时延 pthread_cancel 用时◎◎◎
 
-dead不彻底摘除 增加时延 pthread_cancel 用时◎◎◎
+free all job 函数
+消除满地的exit
+在二期增加--follow-link开关，一期只采用不follow的处理方式
 做种限速
 
 

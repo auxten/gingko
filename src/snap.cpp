@@ -111,7 +111,7 @@ int load_snap(s_job_t * jo)
     {
         if ((blk_p + i)->digest == (snap_p + i)->digest && (snap_p + i)->done)
         {
-            gko_log(NOTICE, "%d done", i);
+            gko_log(NOTICE, "block %d downloaded previously", i);
             (blk_p + i)->done = 1;
         }
     }

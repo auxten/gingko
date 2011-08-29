@@ -15,7 +15,9 @@ static const unsigned int   JOB_FILE_TYPE_ERR =         102;
 /// job init failed due to can't open the file
 static const unsigned int   JOB_FILE_OPEN_ERR =         103;
 /// job init failed due to recurse error
-static const unsigned int   JOB_RECURSE_ERR =         	104;
+static const unsigned int   JOB_RECURSE_ERR =           104;
+/// job is going to be erased
+static const unsigned int   JOB_TO_BE_ERASED =          105;
 
 
 #endif /** JOB_STATE_H_ **/

@@ -109,20 +109,31 @@ GKO_STATIC_FUNC void * get_blocks_s(void * uri, int fd)
 #ifdef GINGKO_SERV
     extern map<string, s_job_t *> g_m_jobs;
     string uri_string(arg_array[1]);
-    pthread_rwlock_rdlock(&g_grand_lock);
+    pthread_mutex_lock(&g_grand_lock);
     if (g_m_jobs.find(uri_string) == g_m_jobs.end())
     {
         gko_log(WARNING, "got non existed get uri %s", uri_string.c_str());
+        pthread_mutex_unlock(&g_grand_lock);
         return (void *) 0;
     }
     s_job_t *jo = g_m_jobs[uri_string];
-    pthread_rwlock_unlock(&g_grand_lock);
+    pthread_mutex_unlock(&g_grand_lock);
 #else
     extern s_job_t g_job;
     s_job_t *jo = &g_job;
 #endif /** GINGKO_SERV **/
     ///find the block i can send
     ///printf("done flag of %d: %d", 0, (jo->blocks+0)->done);
+#ifdef GINGKO_SERV
+    pthread_mutex_lock(&g_job_lock[jo->lock_id].lock);
+#endif /** GINGKO_SERV **/
+    if(jo->job_state == JOB_TO_BE_ERASED)
+    {
+#ifdef GINGKO_SERV
+        pthread_mutex_unlock(&g_job_lock[jo->lock_id].lock);
+#endif /** GINGKO_SERV **/
+        return (void *) -1;
+    }
     if (gko.ready_to_serv)
     {
         for (i = 0; i < count; i++)
@@ -137,6 +148,9 @@ GKO_STATIC_FUNC void * get_blocks_s(void * uri, int fd)
     {
         i = 0;
     }
+#ifdef GINGKO_SERV
+    pthread_mutex_unlock(&g_job_lock[jo->lock_id].lock);
+#endif /** GINGKO_SERV **/
     block_have = i;
     snprintf(msg, MSG_LEN, "HAVE\t%lld", block_have);
     if ((i = sendall(fd, msg, MSG_LEN, 0)) < 0)
@@ -205,17 +219,17 @@ GKO_STATIC_FUNC void * join_job_s(void * uri, int fd)
 
     strncpy(h.addr, arg_array[2], IP_LEN);
     h.port = atoi(arg_array[3]);
-    pthread_rwlock_wrlock(&g_grand_lock);
+    pthread_mutex_lock(&g_grand_lock);
     it = g_m_jobs.find(uri_string);
     if (it != g_m_jobs.end())
     { ///not first host of the g_job
         jo = it->second;
-        gko_log(NOTICE, "new job host_num: %d", jo->host_num);
-        pthread_rwlock_unlock(&g_grand_lock);
-        pthread_rwlock_wrlock(&g_job_lock[jo->lock_id].lock);
+        pthread_mutex_unlock(&g_grand_lock);
+        pthread_mutex_lock(&g_job_lock[jo->lock_id].lock);
         (*jo->host_set).insert(h);
         jo->host_num = (*jo->host_set).size();
-        pthread_rwlock_unlock(&g_job_lock[jo->lock_id].lock);
+        gko_log(NOTICE, "new job add, host_num: %d", jo->host_num);
+        pthread_mutex_unlock(&g_job_lock[jo->lock_id].lock);
     }
     else
     { ///first host of the g_job, create the g_job
@@ -232,14 +246,15 @@ GKO_STATIC_FUNC void * join_job_s(void * uri, int fd)
         jo->lock_id = i;
         g_m_jobs[uri_string] = jo;
 
-        pthread_rwlock_unlock(&g_grand_lock);
+        pthread_mutex_unlock(&g_grand_lock);
 
-        pthread_rwlock_wrlock(&g_job_lock[jo->lock_id].lock);
+        pthread_mutex_lock(&g_job_lock[jo->lock_id].lock);
         strncpy(jo->uri, arg_array[1], MAX_URI);
         strncpy(jo->path, arg_array[1], MAX_PATH_LEN);
         jo->host_set = new set<s_host_t>;
         (*jo->host_set).insert(h);
         jo->host_num = (*jo->host_set).size();
+        gko_log(NOTICE, "new host join, host_num: %d", jo->host_num);
         if (recurse_dir(jo))
         {
             gko_log(FATAL, "recusre dir failed");
@@ -247,13 +262,13 @@ GKO_STATIC_FUNC void * join_job_s(void * uri, int fd)
             jo->block_count = 0;
             jo->total_size = 0;
             jo->job_state = JOB_RECURSE_ERR;
-            pthread_rwlock_unlock(&g_job_lock[jo->lock_id].lock);
+            pthread_mutex_unlock(&g_job_lock[jo->lock_id].lock);
         }
         if (jo->block_count)
         {
             xor_hash_all(jo, arg);
         }
-        pthread_rwlock_unlock(&g_job_lock[jo->lock_id].lock);
+        pthread_mutex_unlock(&g_job_lock[jo->lock_id].lock);
     }
 
     GKO_INT64 percent;
@@ -295,35 +310,36 @@ GKO_STATIC_FUNC void * join_job_s(void * uri, int fd)
             gko_log(WARNING, "sending s_block_t error!");
         }
     }
-    /**
-     * send known host, calloc 1 item larger to indicate the end of array
-     **/
-    pthread_rwlock_wrlock(&g_job_lock[jo->lock_id].lock);
-    jo->host_num = (*(jo->host_set)).size();
-    if (jo->host_num > 1)
-    {
-        host_array = (s_host_t *) calloc(jo->host_num + 1, sizeof(s_host_t));
-        if (!host_array)
-        {
-            gko_log(WARNING, "calloc host_array failed");
-        }
-        ///copy the set to array So called "Serialize"
-        copy((*(jo->host_set)).begin(), (*(jo->host_set)).end(), host_array);
-        pthread_rwlock_unlock(&g_job_lock[jo->lock_id].lock);
 
-        if ((i = sendall(fd, (const void *) (host_array),
-                jo->host_num * sizeof(s_host_t), 0)) < 0)
-        {
-            gko_log(WARNING, "sending host_set error!");
-        }
-        broadcast_join(host_array, &h);
-        free(host_array);
-        host_array = NULL;
-    }
-    else
+    /**
+     * send known host
+     **/
+    host_array = (s_host_t *) calloc(jo->host_num , sizeof(s_host_t));
+    if (!host_array)
     {
-        pthread_rwlock_unlock(&g_job_lock[jo->lock_id].lock);
+        gko_log(WARNING, "calloc host_array failed");
     }
+    ///copy the set to array So called "Serialize"
+    int i_a = 0;
+    for (set<s_host_t>::iterator i = (*(jo->host_set)).begin(); i
+            != (*(jo->host_set)).end(); i++)
+    {
+        memcpy(host_array + i_a, &(*i), sizeof(s_host_t));
+        if(++i_a >= jo->host_num)
+        {
+            break;
+        }
+    }
+    //copy((*(jo->host_set)).begin(), (*(jo->host_set)).begin() + jo->host_num, host_array);
+    if ((i = sendall(fd, (const void *) (host_array),
+            jo->host_num * sizeof(s_host_t), 0)) < 0)
+    {
+        gko_log(WARNING, "sending host_set error!");
+    }
+    free(host_array);
+    host_array = NULL;
+
+
 #else
     extern s_job_t g_job;
     memset(&g_job, 0, sizeof(s_job_t));
@@ -369,10 +385,11 @@ GKO_STATIC_FUNC void * new_host_s(void * uri, int fd)
          * when gko.ready_to_serv
          * insert and host_hash the host
          **/
-        pthread_rwlock_wrlock(&g_clnt_lock);
+        pthread_mutex_lock(&g_clnt_lock);
         (*(g_job.host_set)).insert(h);
-        pthread_rwlock_unlock(&g_clnt_lock);
+        pthread_mutex_unlock(&g_clnt_lock);
         host_hash(&g_job, &h, NULL, ADD_HOST);
+        gko_log(NOTICE, "NEWW host %s:%d joined", h.addr, h.port);
 
     }
     else
@@ -417,15 +434,15 @@ GKO_STATIC_FUNC void * dead_host_s(void * uri, int fd)
 
     strncpy(h.addr, arg_array[2], IP_LEN);
     h.port = atoi(arg_array[3]);
-    pthread_rwlock_wrlock(&g_grand_lock);
+    pthread_mutex_lock(&g_grand_lock);
     it = g_m_jobs.find(uri_string);
     if (it != g_m_jobs.end())
     { ///found the g_job
         jo = it->second;
-        pthread_rwlock_unlock(&g_grand_lock);
+        pthread_mutex_unlock(&g_grand_lock);
         if (connect_host(&h, RCV_TIMEOUT, SND_TIMEOUT) == HOST_DOWN_FAIL)
         {
-            pthread_rwlock_wrlock(&g_job_lock[jo->lock_id].lock);
+            pthread_mutex_lock(&g_job_lock[jo->lock_id].lock);
             (*jo->host_set).erase(h);
             jo->host_num = (*jo->host_set).size();
             s_host_t * host_array = (s_host_t *) calloc(jo->host_num + 1,
@@ -435,7 +452,7 @@ GKO_STATIC_FUNC void * dead_host_s(void * uri, int fd)
                 gko_log(WARNING, "calloc host_array failed");
             }
             copy((*(jo->host_set)).begin(), (*(jo->host_set)).end(), host_array);
-            pthread_rwlock_unlock(&g_job_lock[jo->lock_id].lock);
+            pthread_mutex_unlock(&g_job_lock[jo->lock_id].lock);
             gko_log(NOTICE, "g_job: %s, host_num: %d", jo->uri, jo->host_num);
             if (jo->host_num == 0)
             {
@@ -466,7 +483,7 @@ GKO_STATIC_FUNC void * dead_host_s(void * uri, int fd)
     }
     else
     { ///found no g_job
-        pthread_rwlock_unlock(&g_grand_lock);
+        pthread_mutex_unlock(&g_grand_lock);
         gko_log(WARNING, "find no g_job: %s", uri_string.c_str());
     }
 #else
@@ -507,13 +524,13 @@ GKO_STATIC_FUNC void * quit_job_s(void * uri, int fd)
 
     strncpy(h.addr, arg_array[2], IP_LEN);
     h.port = atoi(arg_array[3]);
-    pthread_rwlock_wrlock(&g_grand_lock);
+    pthread_mutex_lock(&g_grand_lock);
     it = g_m_jobs.find(uri_string);
     if (it != g_m_jobs.end())
     {/** found the g_job **/
         jo = it->second;
-        pthread_rwlock_unlock(&g_grand_lock);
-        pthread_rwlock_wrlock(&g_job_lock[jo->lock_id].lock);
+        pthread_mutex_unlock(&g_grand_lock);
+        pthread_mutex_lock(&g_job_lock[jo->lock_id].lock);
         if ((*jo->host_set).find(h) != (*jo->host_set).end())
         {/** the host is in this g_job host_set **/
             (*jo->host_set).erase(h);
@@ -525,7 +542,7 @@ GKO_STATIC_FUNC void * quit_job_s(void * uri, int fd)
                 gko_log(FATAL, "calloc host_array failed");
             }
             copy((*(jo->host_set)).begin(), (*(jo->host_set)).end(), host_array);
-            pthread_rwlock_unlock(&g_job_lock[jo->lock_id].lock);
+            pthread_mutex_unlock(&g_job_lock[jo->lock_id].lock);
             gko_log(NOTICE, "g_job: %s, host_num: %d", jo->uri, jo->host_num);
             if (jo->host_num == 0)
             {
@@ -555,14 +572,14 @@ GKO_STATIC_FUNC void * quit_job_s(void * uri, int fd)
         }
         else
         {
-            pthread_rwlock_unlock(&g_job_lock[jo->lock_id].lock);
+            pthread_mutex_unlock(&g_job_lock[jo->lock_id].lock);
             gko_log(NOTICE, "QUITed host %s:%d is not in this g_job", h.addr,
                     h.port);
         }
     }
     else
     { /** find no g_job **/
-        pthread_rwlock_unlock(&g_grand_lock);
+        pthread_mutex_unlock(&g_grand_lock);
         gko_log(WARNING, "find no g_job: %s", uri_string.c_str());
     }
 #else
@@ -607,9 +624,9 @@ GKO_STATIC_FUNC void * del_host_s(void * uri, int fd)
         /**
          * when gko.ready_to_serv del the host
          **/
-        pthread_rwlock_wrlock(&g_clnt_lock);
+        pthread_mutex_lock(&g_clnt_lock);
         (*(g_job.host_set)).erase(h);
-        pthread_rwlock_unlock(&g_clnt_lock);
+        pthread_mutex_unlock(&g_clnt_lock);
         host_hash(&g_job, &h, NULL, DEL_HOST);
 
     }

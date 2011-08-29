@@ -38,7 +38,13 @@
 #else
 #include <sys/sendfile.h>
 #endif /** __APPLE__ **/
+#ifdef __APPLE__
+#include <poll.h>
+#else
+#include <sys/poll.h>
+#endif /** __APPLE__ **/
 
+#include "config.h"
 #include "gingko.h"
 #include "async_pool.h"
 #include "hash/xor_hash.h"
@@ -56,9 +62,9 @@
 /////default pthread_attr_t
 //extern pthread_attr_t g_attr;
 ///client wide lock
-extern pthread_rwlock_t g_clnt_lock;
+extern pthread_mutex_t g_clnt_lock;
 ///block host set lock
-extern pthread_rwlock_t g_blk_hostset_lock;
+extern pthread_mutex_t g_blk_hostset_lock;
 /////mutex for gko.hosts_new_noready
 //extern pthread_mutex_t g_hosts_new_noready_mutex;
 /////mutex for gko.hosts_del_noready
@@ -115,14 +121,14 @@ s_host_hash_result_t * host_hash(s_job_t * jo, const s_host_t * new_host,
     for (int i = 0; i < VNODE_NUM; i++)
     {
         GKO_INT64 vnode = (i * vnode_distance + vnode_start) % (jo->block_count);
-        pthread_rwlock_wrlock(&g_blk_hostset_lock);
+        pthread_mutex_lock(&g_blk_hostset_lock);
         h_set = ((jo->blocks) + vnode)->host_set;
         if (!h_set)
         {
             if (usage & DEL_HOST)
             {
                 gko_log(WARNING, "del host from non existed set");
-                pthread_rwlock_unlock(&g_blk_hostset_lock);
+                pthread_mutex_unlock(&g_blk_hostset_lock);
                 continue;
             }
             else
@@ -139,7 +145,7 @@ s_host_hash_result_t * host_hash(s_job_t * jo, const s_host_t * new_host,
             (*h_set).insert(*new_host);
         }
 
-        pthread_rwlock_unlock(&g_blk_hostset_lock);
+        pthread_mutex_unlock(&g_blk_hostset_lock);
 
         if (result)
         {
@@ -192,6 +198,7 @@ GKO_INT64 get_blocks_c(s_job_t * jo, s_host_t * dhost, GKO_INT64 num, GKO_INT64 
         /** the remote host maybe down, tell the server **/
         snprintf(msg, MSG_LEN, "DEAD\t%s\t%s\t%u", jo->uri, dhost->addr,
                 dhost->port);
+        gko_log(NOTICE, "telling server %s", msg);
         if (FAIL_CHECK(sendcmd(&gko.the_serv, msg, RCV_TIMEOUT, SND_TIMEOUT)))
         {
             gko_log(WARNING, "sendcmd host_down_cmd failed");
@@ -294,10 +301,12 @@ int helo_serv_c(void * arg, int fd, s_host_t * server)
     recv_timeout.tv_usec = 0;
     send_timeout.tv_sec = SND_TIMEOUT;
     send_timeout.tv_usec = 0;
-    struct hostent serv;
+    in_addr_t serv;
+    int addr_len;
     fd_set wset;
 
-    if (!gethostname_my(server->addr, &serv))
+    addr_len = getaddr_my(server->addr, &serv);
+    if (!addr_len)
     {
         gko_log(FATAL, "gethostbyname error");
         return -1;
@@ -313,7 +322,7 @@ int helo_serv_c(void * arg, int fd, s_host_t * server)
 
     memset(&channel, 0, sizeof(channel));
     channel.sin_family = AF_INET;
-    memcpy(&channel.sin_addr.s_addr, serv.h_addr, serv.h_length);
+    memcpy(&channel.sin_addr.s_addr, &serv, addr_len);
     channel.sin_port = htons(server->port);
 
     /** set read & write timeout time **/
@@ -352,9 +361,23 @@ int helo_serv_c(void * arg, int fd, s_host_t * server)
 
     /** Wait for write bit to be set **/
     ///
-    FD_ZERO(&wset);
-    FD_SET(sock, &wset);
-    select_ret = select(FD_SETSIZE, 0, &wset, 0, &send_timeout);
+#if HAVE_POLL
+    {
+        struct pollfd pollfd;
+
+        pollfd.fd = sock;
+        pollfd.events = POLLOUT;
+
+        /* send_sec is in seconds, timeout in ms */
+        select_ret = poll(&pollfd, 1, (int)(SND_TIMEOUT * 1000 + 1));
+    }
+#else
+    {
+        FD_ZERO(&wset);
+        FD_SET(sock, &wset);
+        select_ret = select(sock + 1, 0, &wset, 0, &send_timeout);
+    }
+#endif /* HAVE_POLL */
     if (select_ret < 0)
     {
         gko_log(FATAL, "select error on helo");
@@ -417,6 +440,28 @@ HELO_SERV_C_CLOSE_SOCK:
 }
 
 /**
+ * @brief send the NEWW to all related clients
+ *
+ * @see
+ * @note
+ * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @date 2011-8-1
+ **/
+static int broadcast_join(s_host_t * host_array, s_host_t *h)
+{
+    s_host_t * p_h = host_array;
+    char buf[SHORT_MSG_LEN] =
+        { '\0' };
+    snprintf(buf, SHORT_MSG_LEN, "NEWW\t%s\t%d", h->addr, h->port);
+    while (p_h->port)
+    {
+        sendcmd(p_h, buf, 2, 2);
+        p_h++;
+    }
+    return 0;
+}
+
+/**
  * @brief send JOIN handler
  *
  * @see
@@ -432,6 +477,8 @@ void * join_job_c(void * arg, int fd)
     void * ret;
     char * client_local_path = (char *) calloc(1, MAX_PATH_LEN);
     s_host_t * host_buf;
+    char broadcast_buf[SHORT_MSG_LEN] =
+        { '\0' };
     snprintf(msg, MAX_URI, "JOIN\t%s\t%s\t%d", g_job.uri, gko.the_clnt.addr,
             gko.the_clnt.port);
     sock = connect_host(&gko.the_serv, 10, SND_TIMEOUT);
@@ -534,8 +581,9 @@ void * join_job_c(void * arg, int fd)
         j = readall(sock, g_job.blocks, g_job.blocks_size, MSG_WAITALL);
         gko_log(NOTICE, "blocks seed have read %d of %lld", j, g_job.blocks_size);
     }
+
     ///read hosts
-    host_buf = (s_host_t *) calloc(g_job.host_num, sizeof(s_host_t));
+    host_buf = (s_host_t *) calloc(g_job.host_num + 1, sizeof(s_host_t));
     if (!host_buf)
     {
         gko_log(FATAL, "s_host_t buf calloc failed");
@@ -547,21 +595,28 @@ void * join_job_c(void * arg, int fd)
 
     ///put hosts into g_job.host_set
     g_job.host_set = new set<s_host_t> ;
-    pthread_rwlock_wrlock(&g_clnt_lock);
+    pthread_mutex_lock(&g_clnt_lock);
     (*(g_job.host_set)).insert(host_buf, host_buf + g_job.host_num);
-    pthread_rwlock_unlock(&g_clnt_lock);
+    pthread_mutex_unlock(&g_clnt_lock);
+
     free(host_buf);
     host_buf = NULL;
 
+    snprintf(broadcast_buf, SHORT_MSG_LEN, "NEWW\t%s\t%d", gko.the_clnt.addr, gko.the_clnt.port);
+    for (set<s_host_t>::iterator i = (*(g_job.host_set)).begin(); i
+            != (*(g_job.host_set)).end(); i++)
+    {
+        sendcmd((s_host_t *)&(*i), broadcast_buf, 2, 2);
+    }
     /// put the known host in the hash ring
-    pthread_rwlock_rdlock(&g_clnt_lock);
+    pthread_mutex_lock(&g_clnt_lock);
     for (set<s_host_t>::iterator i = (*(g_job.host_set)).begin(); i
             != (*(g_job.host_set)).end(); i++)
     {
         gko_log(NOTICE, "host in set:%s %d", i->addr, i->port);
         host_hash(&g_job, &(*i), NULL, ADD_HOST);
     }
-    pthread_rwlock_unlock(&g_clnt_lock);
+    pthread_mutex_unlock(&g_clnt_lock);
     ///	if (g_job.file_count) {
     ///		printf("host_num:%d, uri:%s, file1:%s, HOST:%s", g_job.host_num,
     ///				g_job.uri, g_job.files->name, ((*(g_job.host_set)).begin())->addr);
@@ -569,20 +624,20 @@ void * join_job_c(void * arg, int fd)
     gko_log(NOTICE, "g_job.block_count: %lld", g_job.block_count);
     if (g_job.block_count)
     {
-        pthread_rwlock_rdlock(&g_blk_hostset_lock);
+        pthread_mutex_lock(&g_blk_hostset_lock);
         for (j = 0; j < g_job.block_count; j++)
         {
             if ((g_job.blocks + j)->host_set)
             {
                 for (set<s_host_t>::iterator it =
-                        (*((g_job.blocks + j)->host_set)).begin(); it
+                    (*((g_job.blocks + j)->host_set)).begin(); it
                         != (*((g_job.blocks + j)->host_set)).end(); it++)
                 {
                     gko_log(NOTICE, "%d %s:%d", j, it->addr, it->port);
                 }
             }
         }
-        pthread_rwlock_unlock(&g_blk_hostset_lock);
+        pthread_mutex_unlock(&g_blk_hostset_lock);
     }
     ret = (void *) 0;
 
@@ -603,14 +658,50 @@ JOIN_JOB_C_CLOSE_SOCK:
  **/
 int quit_job_c(s_host_t * quit_host, s_host_t * server, char * uri)
 {
+    extern struct event_base *g_ev_base;
     char msg[MSG_LEN] = {'\0'};
     /**
      * send "QUIT uri host port" to server
      **/
     snprintf(msg, MSG_LEN, "QUIT\t%s\t%s\t%d", g_job.uri, quit_host->addr,
             quit_host->port);
+    gko_log(NOTICE, "quiting : '%s'", msg);
+    if(sendcmd(server, msg, 2, 2) < 0)
+    {
+        gko_log(NOTICE, "sending quit message failed");
+    }
+
+    if(event_base_loopbreak(g_ev_base) != 0)
+    {
+        gko_log(FATAL, "event_base_loopbreak failed");
+    }
+    else
+    {
+        gko_log(NOTICE, "event_base_loopbreak succeed");
+    }
+
+    for (GKO_INT64 i = 0; i < g_job.block_count; i++)
+    {
+        delete (g_job.blocks + i)->host_set;
+    }
+    if (g_job.blocks)
+    {
+        free(g_job.blocks);
+        g_job.blocks = NULL;
+    }
+    if (g_job.files)
+    {
+        free(g_job.files);
+        g_job.files = NULL;
+    }
+    if (g_job.host_set)
+    {
+        delete g_job.host_set;
+        g_job.host_set = NULL;
+    }
+
     ///printf("sent: %s", msg);
-    return sendcmd(server, msg, 2, 2);
+    return 0;
 }
 
 /**

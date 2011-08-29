@@ -86,11 +86,13 @@ static const int        MAX_REQ_SERV_BLOCKS =   20;
 /// max length of a uri
 static const int        MAX_URI =               MAX_PATH_LEN;
 /// nftw depth this sames have no effect....whatever 100 is enough
-static const int        MAX_DIR_DEPTH =         100;
+static const int        MAX_SCAN_DIR_FD =       5;
 ///((1LL<<sizeof(GKO_INT64)*8-1)-1);
 static const GKO_INT64  MAX_INT64 =             9223372036854775807LL;
 /// retry 3 times then fail
 static const int        MAX_RETRY =             3;
+/// min value of ulimit -n
+static const GKO_INT64  MIN_NOFILE =            5000;
 /// bind port failed return
 static const int        BIND_FAIL =             -13;
 /// connect failed return
@@ -125,6 +127,8 @@ static const int        SECOND_HOST_COUNT =     5;
 static const int        RCV_TIMEOUT =           10;
 /// in seconds
 static const int        SND_TIMEOUT =           5;
+/// sleep time before free the job related mem
+static const int        ERASE_JOB_MEM_WAIT =    (SND_TIMEOUT + 5);
 ///bytes per second
 static const int        CLNT_LIMIT_UP_RATE =    (20 * 1024 * 1024);
 ///bytes per second
@@ -145,8 +149,8 @@ static const mode_t     SNAP_FILE_MODE =        0666;
 static const int        SNAP_OPEN_FLAG =        (O_RDONLY | O_CREAT | O_NOCTTY);
 static const int        SNAP_REOPEN_FLAG =      (O_WRONLY | O_TRUNC | O_CREAT | O_NOCTTY);
 static const int        CREATE_OPEN_FLAG =      (O_WRONLY | O_CREAT | O_NOCTTY);
-static const int        READ_OPEN_FLAG =        (O_RDONLY | O_NOFOLLOW | O_NOCTTY);
-static const int        WRITE_OPEN_FLAG =       (O_WRONLY | O_NOFOLLOW | O_NOCTTY);
+static const int        READ_OPEN_FLAG =        (O_RDONLY | O_NOCTTY);
+static const int        WRITE_OPEN_FLAG =       (O_WRONLY | O_NOCTTY);
 
 static const int        MSG_LEN =               (MAX_URI + IP_LEN + 32 + MAX_LONG_INT * 2);
 static const int        CLNT_READ_BUFFER_SIZE = (MSG_LEN);
@@ -350,7 +354,7 @@ typedef struct _s_seed_t
 typedef struct _s_lock_t
 {
     char state;
-    pthread_rwlock_t lock;
+    pthread_mutex_t lock;
 } s_lock_t;
 
 /// for passing write arg in libevent callback
@@ -481,6 +485,10 @@ int sep_arg(char * inputstring, char * arg_array[], int max);
 int parse_req(char *req);
 /// parse the request return the proper func handle num
 struct hostent * gethostname_my(const char *host, struct hostent *hostbuf);
+/// get host in_addr_t, this only works on IPv4. that is enough
+int getaddr_my(const char *host, in_addr_t * addr_p);
+/// check ulimit -n
+int check_ulimit();
 ///// erase job related stuff
 //int erase_job(string &uri_string);
 /// hash the host to the data ring
@@ -492,8 +500,6 @@ int sendblocks(int out_fd, s_job_t * jo, GKO_INT64 start, GKO_INT64 num);
 int writeblock(s_job_t * jo, const u_char * buf, s_block_t * blk);
 /// Before send data all req to server will filtered by conn_send_data
 void conn_send_data(int fd, void *str, unsigned int len);
-///// Before send data all req to server will filtered by conn_send_data
-//int broadcast_join(s_host_t * host_array, s_host_t *h);
 /// send cmd msg to host, not read response, on succ return 0
 int sendcmd(s_host_t *h, const char * cmd, int recv_sec, int send_sec);
 /// try best to read specificed bytes from a file to buf

@@ -58,7 +58,7 @@ struct conn_server
     char is_server;
     int listen_fd;
     struct sockaddr_in listen_addr;
-    unsigned long srv_addr;
+    in_addr_t srv_addr;
     int srv_port;
     unsigned int start_time;
     int nonblock;

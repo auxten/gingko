@@ -54,12 +54,13 @@ using namespace std;
 
 /************** PTHREAD STUFF **************/
 ///server wide lock
-extern pthread_rwlock_t g_grand_lock;
+extern pthread_mutex_t g_grand_lock;
 ///job specific lock
 extern s_lock_t g_job_lock[MAX_JOBS];
 /************** PTHREAD STUFF **************/
 
 GINGKO_OVERLOAD_S_HOST_LT
+extern map<string, s_job_t *> g_m_jobs;
 
 
 /**
@@ -74,34 +75,44 @@ int erase_job(string &uri_string)
 {
     int ret;
     s_job_t *jo;
+    GKO_INT64 progress;
+    GKO_INT64 percent;
+
     /// jobs map
-    map<string, s_job_t *> g_m_jobs;
     map<string, s_job_t *>::iterator it;
 
     {
-        pthread_rwlock_rdlock(&g_grand_lock);
+        pthread_mutex_lock(&g_grand_lock);
         if ((it = g_m_jobs.find(uri_string)) == g_m_jobs.end())
         {
             ret = -1;
-            pthread_rwlock_unlock(&g_grand_lock);
+            gko_log(FATAL, "erase %s fail", uri_string.c_str());
+            pthread_mutex_unlock(&g_grand_lock);
             goto ERASE_RET;
         }
         jo = it->second;
+        jo->job_state = JOB_TO_BE_ERASED;
         /** then erase job for the job map **/
         g_m_jobs.erase(uri_string);
         gko_log(NOTICE, "g_m_jobs.size: %lld", (GKO_UINT64) g_m_jobs.size());
-        pthread_rwlock_unlock(&g_grand_lock);
+        pthread_mutex_unlock(&g_grand_lock);
     }
-    /** cancel the hash threads if any **/
-    for (int i = 0; i < XOR_HASH_TNUM; i++)
+    /** cancel the hash threads if any progress < 99% **/
+    progress = array_sum(jo->hash_progress, XOR_HASH_TNUM);
+    percent = jo->total_size ? progress * 100 / jo->total_size : 100;
+
+    if (percent < 99)
     {
-        if (! pthread_cancel(jo->hash_worker[i]))
+        for (int i = 0; i < XOR_HASH_TNUM; i++)
         {
-            gko_log(NOTICE, "hash thread %d canceling", i);
-        }
-        else
-        {
-            gko_log(FATAL, "hash thread %d cancel failed", i);
+            if (! pthread_cancel(jo->hash_worker[i]))
+            {
+                gko_log(NOTICE, "hash thread %d canceling", i);
+            }
+            else
+            {
+                gko_log(FATAL, "hash thread %d cancel failed", i);
+            }
         }
     }
 
@@ -111,11 +122,11 @@ int erase_job(string &uri_string)
      * timeout and stop sending blocks. then we
      * can erase the job successfully
      **/
-    sleep(SND_TIMEOUT + 2);
+    sleep(ERASE_JOB_MEM_WAIT);
 
 
     /** clean the job struct **/
-    pthread_rwlock_wrlock(&g_job_lock[jo->lock_id].lock);
+    pthread_mutex_lock(&g_job_lock[jo->lock_id].lock);
     if (jo->blocks)
     {
         free(jo->blocks);
@@ -139,40 +150,18 @@ int erase_job(string &uri_string)
             jo->hash_buf[i] = NULL;
         }
     }
-    pthread_rwlock_unlock(&g_job_lock[jo->lock_id].lock);
+    pthread_mutex_unlock(&g_job_lock[jo->lock_id].lock);
 
     /** for safety re-init the rwlock **/
-    pthread_rwlock_destroy(&(g_job_lock[jo->lock_id].lock));
-    pthread_rwlock_init(&(g_job_lock[jo->lock_id].lock), NULL);
+    pthread_mutex_destroy(&(g_job_lock[jo->lock_id].lock));
+    pthread_mutex_init(&(g_job_lock[jo->lock_id].lock), NULL);
     g_job_lock[jo->lock_id].state = LK_FREE;
 
     free(jo);
+    gko_log(NOTICE, "job '%s' erased", uri_string.c_str());
     ret = 0;
 
 ERASE_RET:
     return ret;
 }
 
-/**
- * @brief send the NEWW to all related clients
- *
- * @see
- * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
- * @date 2011-8-1
- **/
- int broadcast_join(s_host_t * host_array, s_host_t *h)
-{
-    /// jobs map
-    map<string, s_job_t *> g_m_jobs;
-    s_host_t * p_h = host_array;
-    char buf[SHORT_MSG_LEN] =
-        { '\0' };
-    snprintf(buf, SHORT_MSG_LEN, "NEWW\t%s\t%d", h->addr, h->port);
-    while (p_h->port)
-    {
-        sendcmd(p_h, buf, 2, 2);
-        p_h++;
-    }
-    return 0;
-}

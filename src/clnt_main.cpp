@@ -56,9 +56,9 @@
 ///default pthread_attr_t
 pthread_attr_t g_attr;
 ///client wide lock
-pthread_rwlock_t g_clnt_lock;
+pthread_mutex_t g_clnt_lock;
 ///block host set lock
-pthread_rwlock_t g_blk_hostset_lock;
+pthread_mutex_t g_blk_hostset_lock;
 ///mutex for gko.hosts_new_noready
 pthread_mutex_t g_hosts_new_noready_mutex;
 ///mutex for gko.hosts_del_noready
@@ -159,7 +159,8 @@ GKO_STATIC_FUNC void * vnode_download(void * arg)
         if (h == gko.the_serv)
         {
             blk_cnt_tmp
-                    = MIN(MIN(MAX_REQ_SERV_BLOCKS, blk_count - blk_got - i), count2edge);
+            =
+                MIN(MIN(MAX_REQ_SERV_BLOCKS, blk_count - blk_got - i), count2edge);
         }
         else
         {
@@ -211,20 +212,23 @@ GKO_STATIC_FUNC int node_download(void *)
         {
             h_hash.length[i] = 0;
         }
-        h_hash.length[i] = 1;
-        /**
-         * Calculate the vnode area length
-         * go back until we find the node has gko.the_clnt
-         **/
-        set<s_host_t> * host_set_p =
-                (g_job.blocks + (j + 1) % g_job.block_count)->host_set;
-        while (!host_set_p || (*host_set_p).find(gko.the_clnt)
-                == (*host_set_p).end())
+        else
         {
+            h_hash.length[i] = 1;
+            /**
+             * Calculate the vnode area length
+             * go back until we find the node has gko.the_clnt
+             **/
+            set<s_host_t> * host_set_p =
+                    (g_job.blocks + (j + 1) % g_job.block_count)->host_set;
+            while (!host_set_p || (*host_set_p).find(gko.the_clnt)
+                    == (*host_set_p).end())
+            {
 
-            ///printf("j: %lld", j%g_job.block_count);
-            h_hash.length[i]++;
-            host_set_p = (g_job.blocks + (++j + 1) % g_job.block_count)->host_set;
+                ///printf("j: %lld", j%g_job.block_count);
+                h_hash.length[i]++;
+                host_set_p = (g_job.blocks + (++j + 1) % g_job.block_count)->host_set;
+            }
         }
         gko_log(NOTICE, "vnode%d: %lld, length: %lld", i, h_hash.v_node[i],
                 h_hash.length[i]);
@@ -240,8 +244,10 @@ GKO_STATIC_FUNC int node_download(void *)
     for (int i = 0; i < VNODE_NUM; i++)
     {
         pthread_join(vnode_pthread[i], &status);
-        if (status != (void *)0) {
-            gko_log(FATAL, "thread %d joined with error num %lld", i, (long long)status);
+        if (status != (void *) 0)
+        {
+            gko_log(FATAL, "thread %d joined with error num %lld", i,
+                    (long long) status);
             return -1;
         }
     }
@@ -323,6 +329,18 @@ GKO_STATIC_FUNC void * downloadworker(void *)
 
     {
         /**
+         *  generate the gingko snap file path, this should be done after
+         *  all dir is made
+         **/
+        if (!gen_snap_fpath(gko.snap_fpath, g_job.path, g_job.uri))
+        {
+            gko_log(FATAL, FLF("gen snap path error"));
+            pthread_exit((void *) -1);
+        }
+    }
+
+    {
+        /**
          * continue download logic
          **/
         if (gko.opt.to_continue)
@@ -355,10 +373,10 @@ GKO_STATIC_FUNC void * downloadworker(void *)
          * insert and host_hash the hosts NEWWed before gko.ready_to_serv
          **/
         pthread_mutex_lock(&g_hosts_new_noready_mutex);
-        pthread_rwlock_wrlock(&g_clnt_lock);
+        pthread_mutex_lock(&g_clnt_lock);
         (*(g_job.host_set)).insert(gko.hosts_new_noready.begin(),
                 gko.hosts_new_noready.end());
-        pthread_rwlock_unlock(&g_clnt_lock);
+        pthread_mutex_unlock(&g_clnt_lock);
 
         for (vector<s_host_t>::iterator it = gko.hosts_new_noready.begin();
                 it != gko.hosts_new_noready.end(); it++)
@@ -373,13 +391,13 @@ GKO_STATIC_FUNC void * downloadworker(void *)
          * delete the hosts DELEed before gko.ready_to_serv
          **/
         pthread_mutex_lock(&g_hosts_del_noready_mutex);
-        pthread_rwlock_wrlock(&g_clnt_lock);
+        pthread_mutex_lock(&g_clnt_lock);
         for (vector<s_host_t>::iterator it = gko.hosts_del_noready.begin(); it
                 != gko.hosts_del_noready.end(); it++)
         {
             (*(g_job.host_set)).erase(*it);
         }
-        pthread_rwlock_unlock(&g_clnt_lock);
+        pthread_mutex_unlock(&g_clnt_lock);
 
         for (vector<s_host_t>::iterator it = gko.hosts_del_noready.begin(); it
                 != gko.hosts_del_noready.end(); it++)
@@ -402,6 +420,7 @@ GKO_STATIC_FUNC void * downloadworker(void *)
 
     gko_log(NOTICE,
             "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@node_download done");
+    fprintf(stderr, "all data download success, uploading...\n");
     for (GKO_INT64 i = 0; i < g_job.block_count; i++)
     {
         if ((g_job.blocks + i)->done != 1)
@@ -424,8 +443,8 @@ GKO_STATIC_FUNC inline void pthread_init()
 {
     pthread_attr_init(&g_attr);
     pthread_attr_setdetachstate(&g_attr, PTHREAD_CREATE_JOINABLE);
-    pthread_rwlock_init(&g_clnt_lock, NULL);
-    pthread_rwlock_init(&g_blk_hostset_lock, NULL);
+    pthread_mutex_init(&g_clnt_lock, NULL);
+    pthread_mutex_init(&g_blk_hostset_lock, NULL);
     pthread_mutex_init(&g_hosts_new_noready_mutex, NULL);
     pthread_mutex_init(&g_hosts_del_noready_mutex, NULL);
     return;
@@ -442,8 +461,8 @@ GKO_STATIC_FUNC inline void pthread_init()
 GKO_STATIC_FUNC inline void pthread_clean()
 {
     pthread_attr_destroy(&g_attr);
-    pthread_rwlock_destroy(&g_clnt_lock);
-    pthread_rwlock_destroy(&g_blk_hostset_lock);
+    pthread_mutex_destroy(&g_clnt_lock);
+    pthread_mutex_destroy(&g_blk_hostset_lock);
     pthread_mutex_destroy(&g_hosts_new_noready_mutex);
     pthread_mutex_destroy(&g_hosts_del_noready_mutex);
     return;
@@ -476,7 +495,6 @@ GKO_STATIC_FUNC void * clnt_int_worker(void * a)
     {
         if (UNLIKELY(gko.sig_flag))
         {
-            gko_log(WARNING, "SIGINT handled.");
             /**
              * send QUIT cmd to server
              **/
@@ -522,13 +540,9 @@ GKO_STATIC_FUNC int gingko_clnt_global_init(int argc, char *argv[])
     gko.ready_to_serv = 0;
     gko.cmd_list_p = g_cmd_list;
     gko.func_list_p = g_func_list_s;
-
-    if(! gen_snap_fpath(gko.snap_fpath, g_job.path, g_job.uri))
-    {
-        gko_log(FATAL, FLF("gen snap path error"));
-        return -1;
-    }
     gko.snap_fd = -2;
+    gko.sig_flag = 0;
+
     return 0;
 }
 
@@ -552,9 +566,6 @@ int main(int argc, char *argv[])
     pthread_init();
     s_async_server_arg_t serv_arg;
     serv_arg.s_host_p = &gko.the_clnt;
-    pthread_create(&download, &g_attr, downloadworker, NULL);
-    pthread_create(&upload, &g_attr, gingko_clnt_async_server,
-            (void *) (&serv_arg));
     /// start check the sig_flag
     if (sig_watcher(clnt_int_worker))
     {
@@ -562,10 +573,14 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
+    pthread_create(&download, &g_attr, downloadworker, NULL);
+    pthread_create(&upload, &g_attr, gingko_clnt_async_server,
+            (void *) (&serv_arg));
     pthread_join(download, &status);
     if (status != (void *)0)
     {
         gko_log(FATAL, "download failed, quiting");
+        quit_job_c(&gko.the_clnt, &gko.the_serv, g_job.uri);
         exit(1);
     }
     else
@@ -573,12 +588,14 @@ int main(int argc, char *argv[])
         if (correct_mode(&g_job))
         {
             gko_log(FATAL, "correct_mode failed");
+            quit_job_c(&gko.the_clnt, &gko.the_serv, g_job.uri);
             exit(1);
         }
         sleep(gko.opt.seed_time);
     }
     quit_job_c(&gko.the_clnt, &gko.the_serv, g_job.uri);
-    gko_log(NOTICE, "client quited");
+    gko_log(NOTICE, "upload end, client quited");
+    fprintf(stderr, "upload end, client quited\n");
     pthread_clean();
     exit(0);
 }

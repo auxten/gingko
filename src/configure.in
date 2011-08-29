@@ -142,7 +142,7 @@ AC_TYPE_SIZE_T
 
 # Checks for library functions.
 AC_FUNC_FORK
-AC_CHECK_FUNCS([gethostbyname memset select socket strerror gettimeofday inet_ntoa])
+AC_CHECK_FUNCS([gethostbyname memset select socket strerror gettimeofday inet_ntoa poll])
 
 AC_CONFIG_SUBDIRS([hash])
 AC_CONFIG_FILES([Makefile hash/Makefile])

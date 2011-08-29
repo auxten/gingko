@@ -148,7 +148,7 @@ GKO_STATIC_FUNC int file_counter(const char *name, const struct stat *status, in
  * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-GKO_STATIC_FUNC void init_total_count_size(s_job_t * jo)
+GKO_STATIC_FUNC int init_total_count_size(s_job_t * jo)
 {
     s_seed_t *p_dir = (s_seed_t *) pthread_getspecific(g_dir_key);
     int type = path_type(jo->path);
@@ -165,17 +165,27 @@ GKO_STATIC_FUNC void init_total_count_size(s_job_t * jo)
         {
             /** if it's a file or symlink to file **/
             struct stat file_stat;
-            stat(jo->path, &file_stat);
+            if(stat(jo->path, &file_stat) != 0)
+            {
+                gko_log(FATAL, "stat file %s error", jo->path);
+                return -1;
+            }
             file_counter(jo->path, &file_stat, FTW_F, NULL);
         }
         else if (type & GKO_DIR)
         {
             /** if it's a dir **/
-            nftw(jo->path, file_counter, MAX_DIR_DEPTH, FTW_PHYS);
+            if(nftw(jo->path, file_counter, MAX_SCAN_DIR_FD, FTW_PHYS) != 0)
+            {
+                gko_log(FATAL, "nftw path %s error", jo->path);
+                return -1;
+            }
         }
         else
         {
             jo->job_state = JOB_FILE_TYPE_ERR;
+            gko_log(FATAL, "the reqeusted path %s type is special", jo->path);
+            return -1;
         }
     }
     /**
@@ -188,7 +198,7 @@ GKO_STATIC_FUNC void init_total_count_size(s_job_t * jo)
     jo->block_count = blk_cnt;
     jo->file_count = p_dir->file_count;
 
-    return;
+    return 0;
 }
 
 /**
@@ -216,16 +226,26 @@ GKO_STATIC_FUNC int init_seed(s_job_t * jo)
         {
             /** if it's a file or symlink to file **/
             struct stat file_stat;
-            stat(jo->path, &file_stat);
+            if(stat(jo->path, &file_stat) != 0)
+            {
+                gko_log(FATAL, "stat file %s error", jo->path);
+                return -1;
+            }
             init_struct(jo->path, &file_stat, FTW_F, NULL);
         }
         else if (type & GKO_DIR)
         {
-            nftw(jo->path, init_struct, MAX_DIR_DEPTH, FTW_PHYS);
+            if(nftw(jo->path, init_struct, MAX_SCAN_DIR_FD, FTW_PHYS) != 0)
+            {
+                gko_log(FATAL, "nftw path %s error", jo->path);
+                return -1;
+            }
         }
         else
         {
             jo->job_state = JOB_FILE_TYPE_ERR;
+            gko_log(FATAL, "the reqeusted path %s type is special", jo->path);
+            return -1;
         }
     }
     for (int i = 0; i < BLOCK_COUNT(p_dir->total_size); i++)
@@ -287,7 +307,11 @@ int recurse_dir(s_job_t * jo)
      **/
     GKO_INT64 blk_cnt;
     GKO_INT64 min_full_blk_cnt;
-    init_total_count_size(jo);
+    if(init_total_count_size(jo) != 0)
+    {
+        gko_log(FATAL, "init_total_count_size error");
+        return -1;
+    }
     blk_cnt = BLOCK_COUNT(p_dir->total_size);
     min_full_blk_cnt = p_dir->total_size ? (blk_cnt - 1) : 0;
 
@@ -323,7 +347,11 @@ int recurse_dir(s_job_t * jo)
     /**
      *  init the files and blocks, and init the last block
      **/
-    init_seed(jo);
+    if(init_seed(jo) != 0)
+    {
+        gko_log(FATAL, "init seed error");
+        return -1;
+    }
 
     jo->files = p_dir->files;
     if (p_dir->total_size)
@@ -349,7 +377,7 @@ int recurse_dir(s_job_t * jo)
                         != (min_full_blk_cnt) * BLOCK_SIZE - (i - (p_dir->files
                                 + j)->size)))
         {
-            gko_log(FATAL, "file division error!");
+            gko_log(NOTICE, "file division maybe error!");
         }
         jo->blocks = p_dir->blocks;
 

@@ -18,6 +18,8 @@
 #include <sys/socket.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
@@ -195,7 +197,66 @@ struct hostent * gethostname_my(const char *host, struct hostent * ret)
     return ret;
 }
 
+/**
+ * @brief get host in_addr_t, this only works on IPv4. that is enough
+ *        return h_length, on error return 0
+ *
+ * @see
+ * @note
+ * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @date 2011-8-25
+ **/
+int getaddr_my(const char *host, in_addr_t * addr_p)
+{
+    struct hostent * tmp;
+    int ret = 0;
+    if (!addr_p)
+    {
+        gko_log(FATAL, "Null buf passed to getaddr_my error");
+        return 0;
+    }
 
+    pthread_mutex_lock(&g_netdb_mutex);
+    tmp = gethostbyname(host);
+    if (tmp)
+    {
+        *addr_p = *(in_addr_t *)tmp->h_addr;
+        ret = tmp->h_length;
+    }
+    else
+    {
+        gko_log(WARNING, "resolve %s failed", host);
+        ret = 0;
+    }
+    pthread_mutex_unlock(&g_netdb_mutex);
+
+    return ret;
+}
+
+/**
+ * @brief check the ulimit -n
+ *
+ * @see
+ * @note
+ * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @date 2011-8-24
+ **/
+int check_ulimit()
+{
+    struct rlimit lmt;
+    if(getrlimit(RLIMIT_NOFILE, &lmt) != 0)
+    {
+        gko_log(FATAL, "getrlimit(RLIMIT_NOFILE, &lmt) error");
+        return -1;
+    }
+    if(lmt.rlim_max < MIN_NOFILE)
+    {
+        fprintf(stderr, "The max open files limit is %lld, you had better make it >= %lld\n", lmt.rlim_max, MIN_NOFILE);
+        gko_log(FATAL, "The max open files limit is %lld, you had better make it >= %lld\n", lmt.rlim_max, MIN_NOFILE);
+        return -1;
+    }
+    return 0;
+}
 
 /**
  * @brief event handle of write
@@ -441,6 +502,7 @@ int readall(int socket, void* data, int data_len, int flags)
 {
     int b_read = 0;
     int n;
+    int timer = RCV_TIMEOUT * 1000000;/// useconds
     while (b_read < data_len)
     {
         n = recv(socket, (char*) data + b_read, data_len - b_read, flags);
@@ -449,8 +511,17 @@ int readall(int socket, void* data, int data_len, int flags)
             gko_log(WARNING, "readall error");
             return -1;
         }
-        b_read += (n < 0 ? 0 : n);
-        usleep(READ_INTERVAL);
+        else
+        {
+            b_read += (n < 0 ? 0 : n);
+            usleep(READ_INTERVAL);
+            timer -= READ_INTERVAL;
+            if (timer <= 0)
+            {
+                gko_log(WARNING, "readall timeout");
+                return -1;
+            }
+        }
     }
     return b_read;
 }
@@ -475,16 +546,17 @@ int sendblocks(int out_fd, s_job_t * jo, GKO_INT64 start, GKO_INT64 num)
      *    may be smaller than BLOCK_SIZE * num
      **/
     GKO_INT64 sent = 0;
+    GKO_INT64 b = start;
+    GKO_INT64 file_size;
+    GKO_UINT64 file_left;
+    int fd = -1;
+
     GKO_INT64 total = BLOCK_SIZE * (num - 1)
             + (start + num >= jo->block_count ? (jo->blocks + jo->block_count
                     - 1)->size : BLOCK_SIZE);
-    GKO_INT64 b = start;
     GKO_INT64 f = (jo->blocks + start)->start_f;
     GKO_UINT64 block_left = (jo->blocks + b)->size;
-    GKO_INT64 file_size;
-    int fd = -1;
     off_t offset = (jo->blocks + start)->start_off;
-    GKO_UINT64 file_left;
     while (total > 0)
     {
         if (fd == -1)
@@ -582,7 +654,7 @@ int writeblock(s_job_t * jo, const u_char * buf, s_block_t * blk)
         int fd = open(file->name, WRITE_OPEN_FLAG);
         if (fd < 0)
         {
-            gko_log(WARNING, "open file %s for write error", file->name);
+            gko_log(WARNING, "open file '%s' for write error", file->name);
             return -2;
         }
         wrote = pwrite(fd, buf + counter, MIN(file_size - offset, total),

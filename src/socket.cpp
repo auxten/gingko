@@ -10,9 +10,16 @@
 #include <sys/socket.h>
 #include <netdb.h>
 
+#include "config.h"
 #include "gingko.h"
 #include "log.h"
 #include "socket.h"
+#ifdef __APPLE__
+#include <poll.h>
+#else
+#include <sys/poll.h>
+#endif /** __APPLE__ **/
+
 
 /**
  * @brief Set non-blocking
@@ -92,12 +99,14 @@ int connect_host(s_host_t * h, int recv_sec, int send_sec)
     int res;
     socklen_t res_size = sizeof res;
     struct sockaddr_in channel;
-    struct hostent host;
+    in_addr_t host;
+    int addr_len;
     struct timeval recv_timeout;
     struct timeval send_timeout;
     fd_set wset;
 
-    if (FAIL_CHECK(!gethostname_my(h->addr, &host)))
+    addr_len = getaddr_my(h->addr, &host);
+    if (FAIL_CHECK(!addr_len))
     {
         gko_log(WARNING, "gethostbyname %s error", h->addr);
         ret = -1;
@@ -118,7 +127,7 @@ int connect_host(s_host_t * h, int recv_sec, int send_sec)
 
     memset(&channel, 0, sizeof(channel));
     channel.sin_family = AF_INET;
-    memcpy(&channel.sin_addr.s_addr, host.h_addr, host.h_length);
+    memcpy(&channel.sin_addr.s_addr, &host, addr_len);
     channel.sin_port = htons(h->port);
 
     /** set the connect non-blocking then blocking for add timeout on connect **/
@@ -139,13 +148,26 @@ int connect_host(s_host_t * h, int recv_sec, int send_sec)
     }
 
     /** Wait for write bit to be set **/
-    ///
-    FD_ZERO(&wset);
-    FD_SET(sock, &wset);
-    select_ret = select(sock + 1, 0, &wset, 0, &send_timeout);
+#if HAVE_POLL
+    {
+        struct pollfd pollfd;
+
+        pollfd.fd = sock;
+        pollfd.events = POLLOUT;
+
+        /* send_sec is in seconds, timeout in ms */
+        select_ret = poll(&pollfd, 1, (int)(send_sec * 1000 + 1));
+    }
+#else
+    {
+        FD_ZERO(&wset);
+        FD_SET(sock, &wset);
+        select_ret = select(sock + 1, 0, &wset, 0, &send_timeout);
+    }
+#endif /* HAVE_POLL */
     if (select_ret < 0)
     {
-        gko_log(FATAL, "select error on connect");
+        gko_log(FATAL, "select/poll error on connect");
         ret = HOST_DOWN_FAIL;
         goto CONNECT_END;
     }
@@ -164,7 +186,7 @@ int connect_host(s_host_t * h, int recv_sec, int send_sec)
     (void) getsockopt(sock, SOL_SOCKET, SO_ERROR, &res, &res_size);
     if (CONNECT_DEST_DOWN(res))
     {
-        gko_log(NOTICE, "dest is down SO_ERROR: %d", res);
+        gko_log(NOTICE, "connect dest is down errno: %d", res);
         ret = HOST_DOWN_FAIL;
         goto CONNECT_END;
     }

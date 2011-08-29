@@ -57,9 +57,9 @@
 ///default pthread_attr_t
 pthread_attr_t g_attr;
 ///client wide lock
-pthread_rwlock_t g_clnt_lock;
+pthread_mutex_t g_clnt_lock;
 ///block host set lock
-pthread_rwlock_t g_blk_hostset_lock;
+pthread_mutex_t g_blk_hostset_lock;
 ///mutex for gko.hosts_new_noready
 pthread_mutex_t g_hosts_new_noready_mutex;
 ///mutex for gko.hosts_del_noready

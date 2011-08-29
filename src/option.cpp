@@ -302,13 +302,15 @@ int clnt_parse_opt(int argc, char *argv[], s_job_t * jo)
                 break;
 
             case 'b':/** bind ip **/
-                struct hostent serv;
-                if (!gethostname_my(optarg, &serv))
+                in_addr_t serv;
+                int addr_len;
+                addr_len = getaddr_my(optarg, &serv);
+                if (!addr_len)
                 {
                     fprintf(stderr, "Can't resolve src server\n");
                     exit(1);
                 }
-                memcpy(&gko.opt.bind_ip, serv.h_addr, serv.h_length);
+                memcpy(&gko.opt.bind_ip, &serv, addr_len);
                 break;
 
             case 'p':/** port **/
@@ -354,13 +356,15 @@ int clnt_parse_opt(int argc, char *argv[], s_job_t * jo)
             exit(1);
         }
         struct sockaddr_in src_addr_in;
-        struct hostent serv;
-        if (!gethostname_my(gko_src, &serv))
+        in_addr_t serv;
+        int addr_len;
+        addr_len = getaddr_my(gko_src, &serv);
+        if (!addr_len)
         {
             fprintf(stderr, "Can't resolve src server\n");
             exit(1);
         }
-        memcpy(&src_addr_in.sin_addr.s_addr, serv.h_addr, serv.h_length);
+        memcpy(&src_addr_in.sin_addr.s_addr, &serv, addr_len);
         strncpy(gko.the_serv.addr, inet_ntoa(src_addr_in.sin_addr),
                 sizeof(gko.the_serv.addr));
         strncpy(jo->uri, p + 1, sizeof(jo->uri));
@@ -368,7 +372,7 @@ int clnt_parse_opt(int argc, char *argv[], s_job_t * jo)
 
         /** the data dst **/
         strncpy(jo->path, gko_dst, sizeof(jo->path));
-        inplace_strip_tailing_slash(jo->path);
+        //inplace_strip_tailing_slash(jo->path);
         fprintf(stderr, "serv: %s:%d, uri: %s, dest: %s\n", gko.the_serv.addr,
                 gko.the_serv.port, jo->uri, jo->path);
     }
@@ -462,14 +466,16 @@ int serv_parse_opt(int argc, char *argv[])
                 break;
 
             case 'b':/** bind ip **/
-                struct hostent serv;
+                in_addr_t serv;
+                int addr_len;
 
-                if (!gethostname_my(optarg, &serv))
+                addr_len = getaddr_my(optarg, &serv);
+                if (!addr_len)
                 {
                     fprintf(stderr, "Can't resolve src server\n");
                     exit(1);
                 }
-                memcpy(&gko.opt.bind_ip, serv.h_addr, serv.h_length);
+                memcpy(&gko.opt.bind_ip, &serv, addr_len);
                 break;
 
             case 'p':/** port **/

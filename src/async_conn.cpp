@@ -14,7 +14,7 @@
 
 extern s_gingko_global_t gko;
 
-static struct event_base *g_ev_base;
+struct event_base *g_ev_base;
 static int g_total_clients;
 static struct conn_client **g_client_list;
 static struct conn_server *g_server;
@@ -161,10 +161,10 @@ int conn_tcp_server(struct conn_server *c)
         }
         else
         {
-            gko_log(WARNING, "Socket bind failed on port");
             return BIND_FAIL;
         }
     }
+    gko_log(NOTICE, "Upload port bind on port %d", g_server->srv_port);
 
     /// Listen socket
     if (listen(g_server->listen_fd, g_server->listen_queue_length) < 0)

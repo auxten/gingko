@@ -22,7 +22,7 @@
 
 /************** PTHREAD STUFF **************/
 ///server wide lock
-pthread_rwlock_t g_grand_lock;
+pthread_mutex_t g_grand_lock;
 ///job specific lock
 s_lock_t g_job_lock[MAX_JOBS];
 pthread_key_t g_dir_key;

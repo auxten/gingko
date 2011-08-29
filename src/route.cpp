@@ -17,7 +17,7 @@
 
 GINGKO_OVERLOAD_S_HOST_EQ
 
-extern pthread_rwlock_t g_blk_hostset_lock;
+extern pthread_mutex_t g_blk_hostset_lock;
 extern s_gingko_global_t gko;
 
 /**
@@ -54,7 +54,7 @@ int get_blk_src(s_job_t * jo, unsigned src_max, GKO_INT64 blk_idx,
     while ((*h_vec).size() < max)
     {
         b = jo->blocks + blk_idx;
-        pthread_rwlock_rdlock(&g_blk_hostset_lock);
+        pthread_mutex_lock(&g_blk_hostset_lock);
         if (b->host_set != NULL && (*(b->host_set)).size() != 0)
         {
             for (set<s_host_t>::iterator i = (*(b->host_set)).begin(); i
@@ -67,7 +67,7 @@ int get_blk_src(s_job_t * jo, unsigned src_max, GKO_INT64 blk_idx,
                 }
             }
         }
-        pthread_rwlock_unlock(&g_blk_hostset_lock);
+        pthread_mutex_unlock(&g_blk_hostset_lock);
         ///printf("blk_idx: %lld\n", blk_idx);
         blk_idx = prev_b(jo, blk_idx);
     }
@@ -103,7 +103,7 @@ int decide_src(s_job_t * jo, int src_max, GKO_INT64 blk_idx,
     for (vector<s_host_t>::iterator i = (*h_vec).begin();
             i != (*h_vec).end();
             i++)
-    {
+            {
         /**
          * if the first host in the vector is myself, pass it
          **/
