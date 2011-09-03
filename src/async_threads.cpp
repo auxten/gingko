@@ -28,8 +28,12 @@ GKO_STATIC_FUNC void thread_worker_new(int id)
 {
     int ret;
 
-    struct thread_worker *worker = (struct thread_worker *) malloc(
-            sizeof(struct thread_worker));
+    struct thread_worker *worker = new struct thread_worker;
+    if(! worker)
+    {
+    	gko_log(FATAL, "new thread_worker failed");
+    	exit(1);
+    }
 
     int fds[2];
     if (pipe(fds) != 0)
@@ -40,7 +44,7 @@ GKO_STATIC_FUNC void thread_worker_new(int id)
     worker->notify_recv_fd = fds[0];
     worker->notify_send_fd = fds[1];
 
-    worker->ev_base = event_init();
+    worker->ev_base = (event_base*)event_init();
     if (!worker->ev_base)
     {
         gko_log(FATAL, "Worker event base initialize error");
@@ -153,8 +157,13 @@ GKO_STATIC_FUNC int thread_list_find_next()
 void thread_init()
 {
     int i;
-    g_worker_list = (struct thread_worker **) calloc(gko.opt.worker_thread,
-            sizeof(struct thread_worker *));
+    g_worker_list = new struct thread_worker *[gko.opt.worker_thread];
+    if (! g_worker_list)
+    {
+        gko_log(FATAL, "new new struct thread_worker *[gko.opt.worker_thread] failed");
+        exit(1);
+    }
+    memset(g_worker_list, 0, sizeof(struct thread_worker *) * gko.opt.worker_thread);
     for (i = 0; i < gko.opt.worker_thread; i++)
     {
         thread_worker_new(i);
@@ -174,6 +183,11 @@ void thread_worker_dispatch(int c_id)
     int worker_id;
     int res;
     worker_id = thread_list_find_next();
+    if (worker_id < 0)
+    {
+        gko_log(WARNING, "can't find available thread");
+        return;
+    }
     res = write((*(g_worker_list + worker_id))->notify_send_fd, &c_id,
             sizeof(int));
     if (res == -1)

@@ -50,7 +50,6 @@
 #include "option.h"
 #include "job_state.h"
 
-using namespace std;
 
 /************** PTHREAD STUFF **************/
 ///server wide lock
@@ -60,7 +59,7 @@ extern s_lock_t g_job_lock[MAX_JOBS];
 /************** PTHREAD STUFF **************/
 
 GINGKO_OVERLOAD_S_HOST_LT
-extern map<string, s_job_t *> g_m_jobs;
+extern std::map<std::string, s_job_t *> g_m_jobs;
 
 
 /**
@@ -71,7 +70,7 @@ extern map<string, s_job_t *> g_m_jobs;
  * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-int erase_job(string &uri_string)
+int erase_job(std::string &uri_string)
 {
     int ret;
     s_job_t *jo;
@@ -79,7 +78,7 @@ int erase_job(string &uri_string)
     GKO_INT64 percent;
 
     /// jobs map
-    map<string, s_job_t *>::iterator it;
+    std::map<std::string, s_job_t *>::iterator it;
 
     {
         pthread_mutex_lock(&g_grand_lock);
@@ -101,7 +100,7 @@ int erase_job(string &uri_string)
     progress = array_sum(jo->hash_progress, XOR_HASH_TNUM);
     percent = jo->total_size ? progress * 100 / jo->total_size : 100;
 
-    if (percent < 99)
+    if (percent < 100)
     {
         for (int i = 0; i < XOR_HASH_TNUM; i++)
         {
@@ -127,14 +126,14 @@ int erase_job(string &uri_string)
 
     /** clean the job struct **/
     pthread_mutex_lock(&g_job_lock[jo->lock_id].lock);
-    if (jo->blocks)
+    if (jo->blocks && jo->block_count)
     {
-        free(jo->blocks);
+        delete [](jo->blocks);
         jo->blocks = NULL;
     }
-    if (jo->files)
+    if (jo->files && jo->file_count)
     {
-        free(jo->files);
+        delete [](jo->files);
         jo->files = NULL;
     }
     if (jo->host_set)
@@ -146,7 +145,7 @@ int erase_job(string &uri_string)
     {
         if (jo->hash_buf[i])
         {
-            free(jo->hash_buf[i]);
+            delete [](jo->hash_buf[i]);
             jo->hash_buf[i] = NULL;
         }
     }
@@ -157,7 +156,7 @@ int erase_job(string &uri_string)
     pthread_mutex_init(&(g_job_lock[jo->lock_id].lock), NULL);
     g_job_lock[jo->lock_id].state = LK_FREE;
 
-    free(jo);
+    delete jo;
     gko_log(NOTICE, "job '%s' erased", uri_string.c_str());
     ret = 0;
 

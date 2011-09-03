@@ -23,6 +23,34 @@
 extern s_gingko_global_t gko;
 
 /**
+ * @brief print version info
+ *
+ * @see
+ * @note
+ * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @date 2011-8-1
+ **/
+void clnt_show_version()
+{
+    printf("gingko_clnt %s\n", GKO_VERSION);
+    return;
+}
+
+/**
+ * @brief print version info
+ *
+ * @see
+ * @note
+ * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @date 2011-8-1
+ **/
+void serv_show_version()
+{
+    printf("gingko_serv %s\n", GKO_VERSION);
+    return;
+}
+
+/**
  * @brief print help info for client
  *
  * @see
@@ -92,6 +120,10 @@ DESCRIPTION\n\
      -l logpath\n\
      --log=logpath\n\
          Path for log file. default is %s\n\
+\n\
+     -v\n\
+     --version\n\
+         Show version message\n\
 \n\
 EXAMPLES\n\
      The following is how to copy the /path/to/data_src_dir from yf-cm-gingko00.yf01 to localhost\n\
@@ -167,6 +199,10 @@ DESCRIPTION\n\
      --seedspeed=seed_speed_limit_num\n\
          Server make seed speed in MB/s.\n\
 \n\
+     -v\n\
+     --version\n\
+         Show version message\n\
+\n\
 \n\
 AUTHORS\n\
      Wang Pengcheng <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>\n\
@@ -201,6 +237,7 @@ int clnt_parse_opt(int argc, char *argv[], s_job_t * jo)
             { "bind", required_argument, 0, 'b' },
             { "port", required_argument, 0, 'p' },
             { "log", required_argument, 0, 'l' },
+            { "version", no_argument, 0, 'v' },
             { 0, 0, 0, 0 } };
 
     /**
@@ -220,7 +257,7 @@ int clnt_parse_opt(int argc, char *argv[], s_job_t * jo)
     {
         int option_index = 0;
 
-        int c = getopt_long(argc, argv, "chu:d:t:n:s:b:p:l:", long_options,
+        int c = getopt_long(argc, argv, "chu:d:t:n:s:b:p:l:v", long_options,
                 &option_index);
         if (c == -1)
         {
@@ -330,6 +367,11 @@ int clnt_parse_opt(int argc, char *argv[], s_job_t * jo)
             case '?':
                 break;
 
+            case 'v':
+                clnt_show_version();
+                exit(0);
+                break;
+
             default:
                 fprintf(stderr, "?? getopt returned character code 0%o ??\n", c);
                 break;
@@ -414,6 +456,7 @@ int serv_parse_opt(int argc, char *argv[])
             { "worker_thread", required_argument, 0, 't' },
             { "connlimit", required_argument, 0, 'n' },
 //            { "seedspeed", required_argument, 0, 'e' },
+            { "version", no_argument, 0, 'v' },
             { 0, 0, 0, 0 } };
 
     /**
@@ -433,7 +476,7 @@ int serv_parse_opt(int argc, char *argv[])
     {
         int option_index = 0;
 
-        int c = getopt_long(argc, argv, "hu:b:p:l:t:n:e:", long_options,
+        int c = getopt_long(argc, argv, "hu:b:p:l:t:n:e:v", long_options,
                 &option_index);
         if (c == -1)
         {
@@ -526,6 +569,11 @@ int serv_parse_opt(int argc, char *argv[])
 //                break;
 
             case '?':
+                break;
+
+            case 'v':
+                serv_show_version();
+                exit(0);
                 break;
 
             default:

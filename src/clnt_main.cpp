@@ -72,8 +72,6 @@ pthread_mutex_t g_hosts_del_noready_mutex;
 GINGKO_OVERLOAD_S_HOST_LT
 GINGKO_OVERLOAD_S_HOST_EQ
 
-using namespace std;
-
 
 /// the g_job assoiate with the client
 s_job_t g_job;
@@ -96,7 +94,7 @@ GKO_STATIC_FUNC void * vnode_download(void * arg)
     s_job_t * jo = p->jo;
     GKO_INT64 blk_idx = p->blk_idx;
     GKO_INT64 blk_count = p->blk_count;
-    vector<s_host_t> h_vec;
+    std::vector<s_host_t> h_vec;
     s_host_t h;
     GKO_INT64 i, tmp, blk_got = 0;
     char * buf;
@@ -104,9 +102,10 @@ GKO_STATIC_FUNC void * vnode_download(void * arg)
     /**
      * prepare the buf to readall data
      **/
-    if ((buf = (char *) malloc(BLOCK_SIZE)) == NULL)
+    buf = new char[BLOCK_SIZE];
+    if (buf == NULL)
     {
-        gko_log(FATAL, "malloc for read buf of blocks_size failed");
+        gko_log(FATAL, "new for read buf of blocks_size failed");
         pthread_exit((void *) 3);
     }
     while (blk_got < blk_count && retry <= MAX_RETRY)
@@ -126,15 +125,19 @@ GKO_STATIC_FUNC void * vnode_download(void * arg)
             break;
         }
         blk_idx_tmp = (blk_idx + blk_got) % jo->block_count;
-        i = get_blk_src(jo, FIRST_HOST_COUNT, blk_idx_tmp, &h_vec);
-        i = decide_src(jo, SECOND_HOST_COUNT, blk_idx_tmp, &h_vec, &h, buf);
+        i = get_blk_src(jo, FIRST_HOST_COUNT + retry, blk_idx_tmp, &h_vec);
+        i = decide_src(jo, SECOND_HOST_COUNT + retry, blk_idx_tmp, &h_vec, &h, buf);
         if (UNLIKELY(! i))
         { /** got no available src **/
             gko_log(WARNING, "decide_src ret: %lld", i);
-            sleep(++retry);
+            sleep(3 + blk_idx_tmp % (++retry));
             if (retry > MAX_RETRY)
             {
                 pthread_exit((void *) 2);
+            }
+            else
+            {
+                continue;
             }
         }
         else
@@ -179,7 +182,8 @@ GKO_STATIC_FUNC void * vnode_download(void * arg)
         }
         ///printf("get_blocks_c: %lld", tmp);
     }
-    free(buf);
+
+    delete [] buf;
     buf = NULL;
     pthread_exit((void *) 0);
 }
@@ -219,7 +223,7 @@ GKO_STATIC_FUNC int node_download(void *)
              * Calculate the vnode area length
              * go back until we find the node has gko.the_clnt
              **/
-            set<s_host_t> * host_set_p =
+            std::set<s_host_t> * host_set_p =
                     (g_job.blocks + (j + 1) % g_job.block_count)->host_set;
             while (!host_set_p || (*host_set_p).find(gko.the_clnt)
                     == (*host_set_p).end())
@@ -286,6 +290,9 @@ GKO_STATIC_FUNC void * downloadworker(void *)
         }
     }
 
+    /// sleep for some time for make clients req server at distribute time
+    usleep(xor_hash(&gko.the_clnt, sizeof(gko.the_clnt), 0) % 5000000);
+
     {
         /**
          * join g_job
@@ -296,6 +303,11 @@ GKO_STATIC_FUNC void * downloadworker(void *)
             gko_log(FATAL, "join g_job error!!");
             pthread_exit((void *) -1);
         }
+        else
+        {
+            g_job.job_state = JOB_IS_JOINED;
+        }
+
         for (int i = 0; i < g_job.block_count; i++)
         {
             (g_job.blocks + i)->done = 0;
@@ -378,7 +390,7 @@ GKO_STATIC_FUNC void * downloadworker(void *)
                 gko.hosts_new_noready.end());
         pthread_mutex_unlock(&g_clnt_lock);
 
-        for (vector<s_host_t>::iterator it = gko.hosts_new_noready.begin();
+        for (std::vector<s_host_t>::iterator it = gko.hosts_new_noready.begin();
                 it != gko.hosts_new_noready.end(); it++)
         {
             host_hash(&g_job, &(*it), NULL, ADD_HOST);
@@ -392,14 +404,14 @@ GKO_STATIC_FUNC void * downloadworker(void *)
          **/
         pthread_mutex_lock(&g_hosts_del_noready_mutex);
         pthread_mutex_lock(&g_clnt_lock);
-        for (vector<s_host_t>::iterator it = gko.hosts_del_noready.begin(); it
+        for (std::vector<s_host_t>::iterator it = gko.hosts_del_noready.begin(); it
                 != gko.hosts_del_noready.end(); it++)
         {
             (*(g_job.host_set)).erase(*it);
         }
         pthread_mutex_unlock(&g_clnt_lock);
 
-        for (vector<s_host_t>::iterator it = gko.hosts_del_noready.begin(); it
+        for (std::vector<s_host_t>::iterator it = gko.hosts_del_noready.begin(); it
                 != gko.hosts_del_noready.end(); it++)
         {
             host_hash(&g_job, &(*it), NULL, DEL_HOST);
@@ -501,7 +513,7 @@ GKO_STATIC_FUNC void * clnt_int_worker(void * a)
             quit_job_c(&gko.the_clnt, &gko.the_serv, g_job.uri);
             /// Clear all status
             gko_log(WARNING, "Client terminated.");
-            exit(1);
+            _exit(1);
         }
         usleep(CK_SIG_INTERVAL);
     }
@@ -556,12 +568,15 @@ GKO_STATIC_FUNC int gingko_clnt_global_init(int argc, char *argv[])
  **/
 int main(int argc, char *argv[])
 {
-    pthread_t download, upload;
+    /// download pthread
+    pthread_t download;
+    /// upload pthread
+    pthread_t upload;
     void *status;
     if(gingko_clnt_global_init(argc, argv) != 0)
     {
         gko_log(FATAL, "gingko_clnt_global_init failed");
-        exit(1);
+        _exit(1);
     }
     pthread_init();
     s_async_server_arg_t serv_arg;
@@ -570,7 +585,7 @@ int main(int argc, char *argv[])
     if (sig_watcher(clnt_int_worker))
     {
         gko_log(FATAL, "signal watcher start error");
-        exit(1);
+        _exit(1);
     }
 
     pthread_create(&download, &g_attr, downloadworker, NULL);
@@ -581,7 +596,7 @@ int main(int argc, char *argv[])
     {
         gko_log(FATAL, "download failed, quiting");
         quit_job_c(&gko.the_clnt, &gko.the_serv, g_job.uri);
-        exit(1);
+        _exit(1);
     }
     else
     {
@@ -589,7 +604,7 @@ int main(int argc, char *argv[])
         {
             gko_log(FATAL, "correct_mode failed");
             quit_job_c(&gko.the_clnt, &gko.the_serv, g_job.uri);
-            exit(1);
+            _exit(1);
         }
         sleep(gko.opt.seed_time);
     }
@@ -597,5 +612,5 @@ int main(int argc, char *argv[])
     gko_log(NOTICE, "upload end, client quited");
     fprintf(stderr, "upload end, client quited\n");
     pthread_clean();
-    exit(0);
+    _exit(0);
 }

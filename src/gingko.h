@@ -47,7 +47,6 @@
 #ifndef GINGKO_H_
 #define GINGKO_H_
 
-using namespace std;
 
 #define                 NO_SO_CALLED_FNV_OPTIMIZE
 #define                 ROT_XOR_HASH
@@ -66,7 +65,7 @@ static const int        SERV_PORT =             2120;
 /// tcp buffer size
 static const int        TCP_BUF_SZ =            262144;
 /// request queue length
-static const int        REQ_QUE_LEN =           50;
+static const int        REQ_QUE_LEN =           SOMAXCONN;
 /// host name length in max
 static const int        MAX_HOST_NAME =         255;
 /// MAXPATHLEN in linux is 4096!!!,is it too long?
@@ -82,7 +81,7 @@ static const int        MAX_PACKET_LEN =        65536;
 /// for global locks
 static const int        MAX_JOBS =              1024;
 /// req at max MAX_REQ_SERV_BLOCKS from serv
-static const int        MAX_REQ_SERV_BLOCKS =   20;
+static const int        MAX_REQ_SERV_BLOCKS =   10;
 /// max length of a uri
 static const int        MAX_URI =               MAX_PATH_LEN;
 /// nftw depth this sames have no effect....whatever 100 is enough
@@ -90,17 +89,15 @@ static const int        MAX_SCAN_DIR_FD =       5;
 ///((1LL<<sizeof(GKO_INT64)*8-1)-1);
 static const GKO_INT64  MAX_INT64 =             9223372036854775807LL;
 /// retry 3 times then fail
-static const int        MAX_RETRY =             3;
+static const int        MAX_RETRY =             30;
 /// min value of ulimit -n
-static const GKO_INT64  MIN_NOFILE =            5000;
+static const GKO_INT64  MIN_NOFILE =            2000;
 /// bind port failed return
 static const int        BIND_FAIL =             -13;
 /// connect failed return
 static const int        HOST_DOWN_FAIL =        -13;
 /// bind port try interval, in microseconds
 static const int        BIND_INTERVAL =         10000;
-/// readall retry interval, in microseconds
-static const int        READ_INTERVAL =         20000;
 /// gko.sig_flag check interval, in microseconds
 static const int        CK_SIG_INTERVAL =       200000;
 /// GKO_INT64 int char
@@ -110,13 +107,13 @@ static const int        MYSTACKSIZE =           (10 * 1024 * 1024);
 /// when download is over seed time
 static const int        SEED_TIME =             60;
 /// default client conn limit
-static const int        CLNT_POOL_SIZE =        6;
+static const int        CLNT_POOL_SIZE =        10;
 /// default client thread num
-static const int        CLNT_ASYNC_THREAD_NUM = 20;
+static const int        CLNT_ASYNC_THREAD_NUM = 2;
 /// default server conn limit
-static const int        SERV_POOL_SIZE =        2000;
+static const int        SERV_POOL_SIZE =        3000;
 /// default client thread num
-static const int        SERV_ASYNC_THREAD_NUM = 200;
+static const int        SERV_ASYNC_THREAD_NUM = 50;
 /// default xor hash thread num
 static const int        XOR_HASH_TNUM =         2;
 /// host count got from hash ring
@@ -126,7 +123,13 @@ static const int        SECOND_HOST_COUNT =     5;
 /// in seconds
 static const int        RCV_TIMEOUT =           10;
 /// in seconds
-static const int        SND_TIMEOUT =           5;
+static const int        SND_TIMEOUT =           10;
+/// in seconds
+static const int        RCVBLK_TIMEOUT =        40;
+/// in seconds
+static const int        SNDBLK_TIMEOUT =        30;
+/// in seconds
+static const int        RCVPROGRESS_TIMEOUT =   600;
 /// sleep time before free the job related mem
 static const int        ERASE_JOB_MEM_WAIT =    (SND_TIMEOUT + 5);
 ///bytes per second
@@ -163,13 +166,14 @@ static const int        MK_DIR_SYMLINK_ERR =    2;
 static const int        DOWNLOAD_ERR =          3;
 
 
-static GKO_CONST_STR     SERVER_LOG =            "/dev/stdout";
-static GKO_CONST_STR     CLIENT_LOG =            "/dev/stdout";
+static GKO_CONST_STR     GKO_VERSION =          "1.0.0.3";
+static GKO_CONST_STR     SERVER_LOG =           "/dev/stdout";
+static GKO_CONST_STR     CLIENT_LOG =           "/dev/stdout";
 /// file for continue interrupted job
-static GKO_CONST_STR     GKO_SNAP_FILE =         "._gk_snapshot_";
+static GKO_CONST_STR     GKO_SNAP_FILE =        "._gk_snapshot_";
 /// for debug usage
-static GKO_CONST_STR     SERVER_IP =             "127.0.0.1";
-static GKO_CONST_STR     TIME_FORMAT =           "[%Y-%m-%d %H:%M:%S] ";
+static GKO_CONST_STR     SERVER_IP =            "127.0.0.1";
+static GKO_CONST_STR     TIME_FORMAT =          "[%Y-%m-%d %H:%M:%S] ";
 
 /// host_hash usage
 static const u_char  DEL_HOST =                 0x01;
@@ -305,7 +309,7 @@ typedef struct _s_block_t
     GKO_INT64 start_f;
     u_char done;
     unsigned int digest;
-    set<s_host_t> * host_set; ///only used by client, lock here
+    std::set<s_host_t> * host_set; ///only used by client, lock here
 } s_block_t;
 
 /// job structure
@@ -320,7 +324,7 @@ typedef struct _s_job_t
     GKO_INT64 files_size;
     s_block_t * blocks;
     GKO_INT64 blocks_size;
-    set<s_host_t> * host_set; ///lock here
+    std::set<s_host_t> * host_set; ///lock here
     GKO_INT64 file_count;
     GKO_INT64 block_count;
     GKO_INT64 total_size;
@@ -439,8 +443,8 @@ typedef struct _s_gingko_global_t
     volatile char ready_to_serv;
 
     /// save the NEWWed, DELEed host when server is not ready
-    vector<s_host_t> hosts_new_noready;
-    vector<s_host_t> hosts_del_noready;
+    std::vector<s_host_t> hosts_new_noready;
+    std::vector<s_host_t> hosts_del_noready;
 
     /// snap file path
     char snap_fpath[MAX_PATH_LEN];

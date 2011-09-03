@@ -44,7 +44,7 @@ const bool cmpByDistance(const s_host_t & h1, const s_host_t & h2)
  * @date 2011-8-1
  **/
 int get_blk_src(s_job_t * jo, unsigned src_max, GKO_INT64 blk_idx,
-        vector<s_host_t> * h_vec)
+        std::vector<s_host_t> * h_vec)
 {
     GKO_UINT64 max = MIN(src_max + 1, (*jo->host_set).size());
     s_block_t * b;
@@ -57,7 +57,7 @@ int get_blk_src(s_job_t * jo, unsigned src_max, GKO_INT64 blk_idx,
         pthread_mutex_lock(&g_blk_hostset_lock);
         if (b->host_set != NULL && (*(b->host_set)).size() != 0)
         {
-            for (set<s_host_t>::iterator i = (*(b->host_set)).begin(); i
+            for (std::set<s_host_t>::iterator i = (*(b->host_set)).begin(); i
                     != (*(b->host_set)).end(); i++)
             {
                 if (find((*h_vec).begin(), (*h_vec).end(), *i)
@@ -88,7 +88,7 @@ int get_blk_src(s_job_t * jo, unsigned src_max, GKO_INT64 blk_idx,
  * @date 2011-8-1
  **/
 int decide_src(s_job_t * jo, int src_max, GKO_INT64 blk_idx,
-        vector<s_host_t> * h_vec, s_host_t * h, char * buf)
+        std::vector<s_host_t> * h_vec, s_host_t * h, char * buf)
 {
     int num;
     int host_i = 0;
@@ -97,10 +97,10 @@ int decide_src(s_job_t * jo, int src_max, GKO_INT64 blk_idx,
     struct timeval after_tv;
     GKO_INT64 fastest_time = MAX_INT64;
     GKO_INT64 tmp_time;
-    vector<s_host_t>::iterator fastest = (*h_vec).end();
+    std::vector<s_host_t>::iterator fastest = (*h_vec).end();
     s_block_t * b;
 
-    for (vector<s_host_t>::iterator i = (*h_vec).begin();
+    for (std::vector<s_host_t>::iterator i = (*h_vec).begin();
             i != (*h_vec).end();
             i++)
             {

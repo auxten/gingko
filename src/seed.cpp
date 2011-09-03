@@ -323,22 +323,24 @@ int recurse_dir(s_job_t * jo)
     }
     if (p_dir->file_count)
     {
-        p_dir->files = (s_file_t *) calloc(p_dir->file_count, sizeof(s_file_t));
+        p_dir->files = new s_file_t[p_dir->file_count];
     }
     if (! p_dir->files)
     {
-    	gko_log(FATAL, "calloc for files failed");
+    	gko_log(FATAL, "new for files failed");
     	return -1;
     }
+    memset(p_dir->files, 0, sizeof(s_file_t) * p_dir->file_count);
     if (p_dir->total_size)
     {
-        p_dir->blocks = (s_block_t *) calloc(blk_cnt, sizeof(s_block_t));
+        p_dir->blocks = new s_block_t[blk_cnt];
     }
     if (! p_dir->blocks)
     {
-    	gko_log(FATAL, "calloc for blocks failed");
+    	gko_log(FATAL, "new for blocks failed");
     	return -1;
     }
+    memset(p_dir->blocks, 0, sizeof(s_block_t) * blk_cnt);
     gko_log(NOTICE, "s_file_t size: %lu", sizeof(s_file_t));
     gko_log(NOTICE, "file count: %lld", p_dir->file_count);
     gko_log(NOTICE, "total size: %lld", p_dir->total_size);

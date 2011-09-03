@@ -28,7 +28,7 @@ s_lock_t g_job_lock[MAX_JOBS];
 pthread_key_t g_dir_key;
 /************** PTHREAD STUFF **************/
 /// jobs map
-map<string, s_job_t *> g_m_jobs;
+std::map<std::string, s_job_t *> g_m_jobs;
 
 /// gingko global stuff
 s_gingko_global_t gko;

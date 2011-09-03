@@ -14,7 +14,7 @@
 
 extern s_gingko_global_t gko;
 
-struct event_base *g_ev_base;
+static struct event_base *g_ev_base;
 static int g_total_clients;
 static struct conn_client **g_client_list;
 static struct conn_server *g_server;
@@ -30,8 +30,8 @@ static struct conn_server *g_server;
  **/
 GKO_STATIC_FUNC int conn_client_list_init()
 {
-    if ((g_client_list = (struct conn_client **) malloc(
-            gko.opt.connlimit * sizeof(struct conn_client *))) == NULL)
+    g_client_list = new struct conn_client *[gko.opt.connlimit];
+    if (g_client_list == NULL)
     {
         gko_log(FATAL, "Malloc error, cannot init client pool");
         exit(-1);
@@ -54,7 +54,7 @@ GKO_STATIC_FUNC int conn_client_list_init()
  **/
 GKO_STATIC_FUNC int gingko_serv_async_server_base_init()
 {
-    g_server = (struct conn_server *) malloc(sizeof(struct conn_server));
+    g_server = new struct conn_server;
     memset(g_server, 0, sizeof(struct conn_server));
     g_server->srv_addr = gko.opt.bind_ip;
     g_server->srv_port = gko.opt.port;
@@ -83,7 +83,12 @@ GKO_STATIC_FUNC int gingko_serv_async_server_base_init()
 GKO_STATIC_FUNC int gingko_clnt_async_server_base_init(s_host_t * the_host)
 {
     int port = MAX_LIS_PORT;
-    g_server = (struct conn_server *) malloc(sizeof(struct conn_server));
+    g_server = new struct conn_server;
+    if(! g_server)
+    {
+    	gko_log(FATAL, "new for g_server failed");
+    	exit(1);
+    }
     memset(g_server, 0, sizeof(struct conn_server));
     g_server->srv_addr = gko.opt.bind_ip;
     g_server->srv_port = port;
@@ -313,7 +318,12 @@ void conn_tcp_server_on_data(int fd, short ev, void *arg)
     if (!client->read_buffer)
     {
         /// Initialize buffer
-        client->read_buffer = (char *) malloc(CLNT_READ_BUFFER_SIZE);
+        client->read_buffer = new char[CLNT_READ_BUFFER_SIZE];
+        if(! client->read_buffer)
+        {
+        	gko_log(FATAL, "new for client->read_buffer failed");
+        	exit(1);
+        }
         client->buffer_size = buffer_avail = CLNT_READ_BUFFER_SIZE;
         memset(client->read_buffer, 0, CLNT_READ_BUFFER_SIZE);
     }
@@ -329,17 +339,18 @@ void conn_tcp_server_on_data(int fd, short ev, void *arg)
         ///gko_log(NOTICE, "%s",client->read_buffer+read_counter);
         read_counter += res;
         client->buffer_size *= 2;
-        client->read_buffer = (char *) realloc(client->read_buffer,
-                client->buffer_size);
-        buffer_avail = client->buffer_size - read_counter;
-        memset(client->read_buffer + read_counter, 0, buffer_avail);
+        char * tmp = client->read_buffer;
+        client->read_buffer = new char[client->buffer_size];
         if (client->read_buffer == NULL)
         {
             gko_log(FATAL, "realloc error");
             conn_client_free(client);
             return;
         }
-        continue;
+        memcpy(client->read_buffer, tmp, read_counter);
+        delete [] tmp;
+        buffer_avail = client->buffer_size - read_counter;
+        memset(client->read_buffer + read_counter, 0, buffer_avail);
     }
     if (res < 0)
     {
@@ -349,7 +360,10 @@ void conn_tcp_server_on_data(int fd, short ev, void *arg)
             ///#define EWOULDBLOCK EAGAIN      /** Operation would block **/
             ///#define EINPROGRESS 36      /** Operation now in progress **/
             ///#define EALREADY    37      /** Operation already in progress **/
-            gko_log(WARNING, "Socket read error");
+            //perror("Socket read error");
+            gko_log(WARNING, "Socket read error %d", errno);
+            conn_client_free(client);
+            return;
         }
     }
     ///gko_log(NOTICE, "read_buffer:%s", client->read_buffer);///test
@@ -383,7 +397,12 @@ struct conn_client * add_new_conn_client(int client_fd)
         tmp = g_client_list[id];
         if (!tmp)
         {
-            tmp = (struct conn_client *) malloc(sizeof(struct conn_client));
+            tmp = new struct conn_client;
+            if(!tmp)
+            {
+            	gko_log(FATAL, "new conn_client failed");
+            	exit(1);
+            }
         }
     }
     else
@@ -444,7 +463,7 @@ int conn_client_free(struct conn_client *client)
         return -1;
     }
     ///close socket and further receives will be disallowed
-    shutdown(client->client_fd, SHUT_RD);
+    //shutdown(client->client_fd, SHUT_RD);
     close(client->client_fd);
     conn_client_clear(client);
     g_total_clients--;
@@ -472,7 +491,7 @@ int conn_client_clear(struct conn_client *client)
         client->buffer_size = 0;
         if (client->read_buffer)
         {
-            free(client->read_buffer);
+            delete [] client->read_buffer;
             client->read_buffer = (char *) NULL;
         }
         /// Delete event
@@ -511,7 +530,7 @@ int conn_close()
         conn_client_free(g_client_list[i]);
     }
 
-    shutdown(g_server->listen_fd, SHUT_RDWR);
+    //shutdown(g_server->listen_fd, SHUT_RDWR);
     close(g_server->listen_fd);
     memset(g_server, 0, sizeof(struct conn_server));
 
@@ -529,7 +548,7 @@ int conn_close()
 void * gingko_clnt_async_server(void * arg)
 {
     s_async_server_arg_t * arg_p = (s_async_server_arg_t *) arg;
-    g_ev_base = event_init();
+    g_ev_base = (event_base*)event_init();
     if (!g_ev_base)
     {
         gko_log(FATAL, "event init failed");
@@ -562,7 +581,7 @@ void * gingko_clnt_async_server(void * arg)
  **/
 int gingko_serv_async_server()
 {
-    g_ev_base = event_init();
+    g_ev_base = (event_base*)event_init();
     if (!g_ev_base)
     {
         gko_log(FATAL, "event init failed");

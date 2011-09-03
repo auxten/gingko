@@ -115,7 +115,7 @@ int load_snap(s_job_t * jo)
             (blk_p + i)->done = 1;
         }
     }
-    free(snap_buf);
+    delete [] snap_buf;
     snap_buf = NULL;
     return 0;
 }

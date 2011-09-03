@@ -18,6 +18,8 @@ static const unsigned int   JOB_FILE_OPEN_ERR =         103;
 static const unsigned int   JOB_RECURSE_ERR =           104;
 /// job is going to be erased
 static const unsigned int   JOB_TO_BE_ERASED =          105;
+/// job is joined, ie: g_job is ready
+static const unsigned int   JOB_IS_JOINED =             106;
 
 
 #endif /** JOB_STATE_H_ **/

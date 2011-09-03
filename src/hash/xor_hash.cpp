@@ -196,7 +196,7 @@ void * xor_hash_worker_f(void * a)
     u_char * buf = (jo->hash_buf)[t_idx];
     if (num == 0)
     {
-        free(buf);
+        delete [] buf;
         (jo->hash_buf)[t_idx] = NULL;
         pthread_exit((void *) 0);
     }
@@ -226,7 +226,7 @@ void * xor_hash_worker_f(void * a)
         {
             gko_log(WARNING, "xor_hash_worker_f open error");
             jo->job_state = JOB_FILE_OPEN_ERR;
-            free(buf);
+            delete [] buf;
             (jo->hash_buf)[t_idx] = NULL;
             pthread_exit((void *) -2);
         }
@@ -273,7 +273,7 @@ void * xor_hash_worker_f(void * a)
 ///        fprintf(stderr, "p_porgress %lld\n", *(arg->p_porgress));
     }
 
-    free(buf);
+    delete [] buf;
     (jo->hash_buf)[arg->index] = NULL;
     gko_log(TRACE, "xor_hash_worker_f returned successfully");
     pthread_exit((void *) 0);
@@ -308,12 +308,13 @@ int xor_hash_all(s_job_t * jo, hash_worker_thread_arg arg[])
      **/
     for (int i = 0; i < XOR_HASH_TNUM; i++)
     {
-    	(jo->hash_buf)[i] = (u_char *) calloc(BLOCK_SIZE + 1, 1);
+    	(jo->hash_buf)[i] = new u_char[BLOCK_SIZE + 1];
         if (FAIL_CHECK(!(jo->hash_buf)[i]))
         {
-            gko_log(FATAL, "calloc fuv hash buf failed");
+            gko_log(FATAL, "new fuv hash buf failed");
             return -1;
         }
+        memset((jo->hash_buf)[i], 0, BLOCK_SIZE + 1);
         arg[i].index = i;
         arg[i].range[0] = jo->block_count / XOR_HASH_TNUM * i;
         arg[i].range[1] = jo->block_count / XOR_HASH_TNUM * (i + 1);

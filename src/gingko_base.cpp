@@ -34,8 +34,14 @@
 #else
 #include <sys/sendfile.h>
 #endif /** __APPLE__ **/
+#ifdef __APPLE__
+#include <poll.h>
+#else
+#include <sys/poll.h>
+#endif /** __APPLE__ **/
 
 #include "event.h"
+#include "config.h"
 
 #include "hash/xor_hash.h"
 #include "gingko.h"
@@ -305,9 +311,61 @@ void ev_fn_gsend(int fd, short ev, void *arg)
  * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-int sendall(int fd, const void * void_p, int sz, int flag)
+//int sendall(int fd, const void * void_p, int sz, int flag)
+//{
+//    s_write_arg_t arg;
+//    if (!sz)
+//    {
+//        return 0;
+//    }
+//    if (!void_p)
+//    {
+//        gko_log(WARNING, "Null Pointer");
+//        return -1;
+//    }
+//    arg.sent = 0;
+//    arg.send_counter = 0;
+//    arg.sz = sz;
+//    arg.p = (char *) void_p;
+//    arg.flag = flag;
+//    arg.retry = 0;
+//    /// FIXME event_init() and event_base_free() waste open pipe
+//    arg.ev_base = event_init();
+//
+//    event_set(&(arg.ev_write), fd, EV_WRITE | EV_PERSIST, ev_fn_gsend,
+//            (void *) (&arg));
+//    event_base_set(arg.ev_base, &(arg.ev_write));
+//    if (-1 == event_add(&(arg.ev_write), 0))
+//    {
+//        gko_log(WARNING, "Cannot handle write data event");
+//    }
+//    event_base_loop(arg.ev_base, 0);
+//    event_del(&(arg.ev_write));
+//    event_base_free(arg.ev_base);
+//    ///gko_log(NOTICE, "sent: %d", arg.sent);
+//    if (arg.sent < 0)
+//    {
+//        gko_log(WARNING, "ev_fn_write error");
+//        return -1;
+//    }
+//    return 0;
+//}
+
+/**
+ * @brief send a mem to fd(usually socket)
+ *
+ * @see
+ * @note
+ * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @date 2011-8-1
+ **/
+int sendall(int fd, const void * void_p, int sz, int timeout)
 {
-    s_write_arg_t arg;
+    int sent = 0;
+    int send_counter = 0;
+    int retry = 0;
+    int select_ret;
+    char * p;
     if (!sz)
     {
         return 0;
@@ -317,32 +375,71 @@ int sendall(int fd, const void * void_p, int sz, int flag)
         gko_log(WARNING, "Null Pointer");
         return -1;
     }
-    arg.sent = 0;
-    arg.send_counter = 0;
-    arg.sz = sz;
-    arg.p = (char *) void_p;
-    arg.flag = flag;
-    arg.retry = 0;
-    /// FIXME event_init() and event_base_free() waste open pipe
-    arg.ev_base = event_init();
+    p =(char *)void_p;
 
-    event_set(&(arg.ev_write), fd, EV_WRITE | EV_PERSIST, ev_fn_gsend,
-            (void *) (&arg));
-    event_base_set(arg.ev_base, &(arg.ev_write));
-    if (-1 == event_add(&(arg.ev_write), 0))
+    while (send_counter < sz)
     {
-        gko_log(WARNING, "Cannot handle write data event");
+#if HAVE_POLL
+        {
+            struct pollfd pollfd;
+
+            pollfd.fd = fd;
+            pollfd.events = POLLOUT;
+
+            /* send_sec is in seconds, timeout in ms */
+            select_ret = poll(&pollfd, 1, (int)(timeout * 1000 + 1));
+        }
+#else
+        {
+            fd_set wset;
+            FD_ZERO(&wset);
+            FD_SET(fd, &wset);
+            select_ret = select(fd + 1, 0, &wset, 0, &send_timeout);
+        }
+#endif /* HAVE_POLL */
+        if (select_ret < 0)
+        {
+            if (ERR_RW_RETRIABLE(errno))
+            {
+                if (retry++ > 3)
+                {
+                    gko_log(WARNING, "select error over 3 times");
+                    return -1;
+                }
+                continue;
+            }
+            gko_log(WARNING, "select/poll error on sendall");
+            return -1;
+        }
+        else if (!select_ret)
+        {
+            gko_log(NOTICE, "select/poll timeout on sendall");
+            return -1;
+        }
+        else
+        { /** select/poll returned a fd **/
+            if (((sent = send(fd, p + send_counter, sz - send_counter,
+                    0)) >= 0) || ERR_RW_RETRIABLE(errno))
+            {
+                ///gko_log(NOTICE, "res: %d",res);
+                ///gko_log(NOTICE, "%s",client->read_buffer+read_counter);
+                ///gko_log(NOTICE, "sent: %d", a->sent);
+                retry = 0;
+                send_counter += MAX(sent, 0);
+            }
+            else
+            {
+                if (retry++ > 3)
+                {
+//                    gko_log(WARNING, "send error over 3 times");
+                    return -1;
+                }
+            }
+
+        }
     }
-    event_base_loop(arg.ev_base, 0);
-    event_del(&(arg.ev_write));
-    event_base_free(arg.ev_base);
-    ///gko_log(NOTICE, "sent: %d", arg.sent);
-    if (arg.sent < 0)
-    {
-        gko_log(WARNING, "ev_fn_write error");
-        return -1;
-    }
-    return 0;
+
+    return send_counter;
 }
 
 /**
@@ -375,7 +472,6 @@ void ev_fn_gsendfile(int fd, short ev, void *arg)
     }
     else
     {
-        gko_log(WARNING, "gsendfile error");
         if (a->retry++ > 3)
         {
             event_del(&(a->ev_write));
@@ -407,7 +503,7 @@ int sendfileall(int out_fd, int in_fd, off_t *offset, GKO_UINT64 *count)
     arg.count = *count;
     arg.retry = 0;
     /// FIXME event_init() and event_base_free() waste open pipe
-    arg.ev_base = event_init();
+    arg.ev_base = (event_base*)event_init();
 
     event_set(&(arg.ev_write), out_fd, EV_WRITE | EV_PERSIST, ev_fn_gsendfile,
             (void *) (&arg));
@@ -421,7 +517,7 @@ int sendfileall(int out_fd, int in_fd, off_t *offset, GKO_UINT64 *count)
     event_base_free(arg.ev_base);
     if (arg.sent < 0)
     {
-        gko_log(WARNING, "ev_fn_gsendfile error");
+//        gko_log(WARNING, "ev_fn_gsendfile error");
         return -1;
     }
     return 0;
@@ -447,7 +543,7 @@ int readfileall(int fd, off_t offset, off_t count, char ** buf)
     }
 
     /// Initialize buffer
-    *buf = (char *) malloc(count);
+    *buf = new char[count];
 
     while (read_counter < count && (res = pread(fd, *buf + read_counter,
             count - read_counter, offset + read_counter)) > 0)
@@ -465,7 +561,7 @@ int readfileall(int fd, off_t offset, off_t count, char ** buf)
             ///#define EINPROGRESS 36      /** Operation now in progress **/
             ///#define EALREADY    37      /** Operation already in progress **/
             gko_log(FATAL, "File read error");
-            free(*buf);
+            delete [] (*buf);
             return -1;
         }
     }
@@ -498,31 +594,132 @@ int readfileall(int fd, off_t offset, off_t count, char ** buf)
  * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-int readall(int socket, void* data, int data_len, int flags)
+//int readall(int socket, void* data, int data_len, int flags)
+//{
+//    int b_read = 0;
+//    int n;
+//    int timer = RCV_TIMEOUT * 1000000;/// useconds
+//    while (b_read < data_len)
+//    {
+//        n = recv(socket, (char*) data + b_read, data_len - b_read, flags);
+//        if (UNLIKELY((n < 0 && !ERR_RW_RETRIABLE(errno)) || !n))
+//        {
+//            gko_log(WARNING, "readall error");
+//            return -1;
+//        }
+//        else
+//        {
+//            b_read += (n < 0 ? 0 : n);
+//            usleep(READ_INTERVAL);
+//            timer -= READ_INTERVAL;
+//            if (timer <= 0)
+//            {
+//                gko_log(WARNING, "readall timeout");
+//                return -1;
+//            }
+//        }
+//    }
+//    return b_read;
+//}
+
+/**
+ * @brief read all from a socket by best effort
+ *
+ * @see
+ * @note
+ * receive all the data or returns error (handles EINTR etc.)
+ * params: socket
+ *         data     - buffer for the results
+ *         data_len -
+ *         flags    - recv flags for the first recv (see recv(2)), only
+ *                    0, MSG_WAITALL and MSG_DONTWAIT make sense
+ * if flags is set to MSG_DONWAIT (or to 0 and the socket fd is non-blocking),
+ * and if no data is queued on the fd, recv_all will not wait (it will
+ * return error and set errno to EAGAIN/EWOULDBLOCK). However if even 1 byte
+ *  is queued, the call will block until the whole data_len was read or an
+ *  error or eof occured ("semi-nonblocking" behaviour,  some tcp code
+ *   counts on it).
+ * if flags is set to MSG_WAITALL it will block even if no byte is available.
+ *
+ * returns: bytes read or error (<0)
+ * can return < data_len if EOF
+ *
+ * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @date 2011-8-1
+ **/
+int readall(int fd, void* data, int data_len, int timeout)
 {
     int b_read = 0;
-    int n;
-    int timer = RCV_TIMEOUT * 1000000;/// useconds
+    int n = 0;
+    int retry = 0;
+    int select_ret = 0;
+
     while (b_read < data_len)
     {
-        n = recv(socket, (char*) data + b_read, data_len - b_read, flags);
-        if (UNLIKELY((n < 0 && !ERR_RW_RETRIABLE(errno)) || !n))
+#if HAVE_POLL
         {
-            gko_log(WARNING, "readall error");
+            struct pollfd pollfd;
+
+            pollfd.fd = fd;
+            pollfd.events = POLLIN;
+
+            /* send_sec is in seconds, timeout in ms */
+            select_ret = poll(&pollfd, 1, (int)(timeout * 1000 + 1));
+        }
+#else
+        {
+            fd_set wset;
+            FD_ZERO(&wset);
+            FD_SET(fd, &wset);
+            select_ret = select(fd + 1, &wset, 0, 0, &send_timeout);
+        }
+#endif /* HAVE_POLL */
+        if (select_ret < 0)
+        {
+            if (ERR_RW_RETRIABLE(errno))
+            {
+                if (retry++ > 3)
+                {
+                    gko_log(WARNING, "select error over 3 times");
+                    return -1;
+                }
+                continue;
+            }
+            gko_log(WARNING, "select/poll error on readall");
+            return -1;
+        }
+        else if (!select_ret)
+        {
+            gko_log(NOTICE, "select/poll timeout on readall");
             return -1;
         }
         else
-        {
-            b_read += (n < 0 ? 0 : n);
-            usleep(READ_INTERVAL);
-            timer -= READ_INTERVAL;
-            if (timer <= 0)
+        { /** select/poll returned a fd **/
+            n = recv(fd, (char*) data + b_read, data_len - b_read, 0);
+            if (UNLIKELY((n < 0 && !ERR_RW_RETRIABLE(errno)) || !n))
             {
-                gko_log(WARNING, "readall timeout");
+                gko_log(WARNING, "readall error");
                 return -1;
             }
+            else
+            {
+                if (n < 0)
+                {
+                    if (retry++ > 3)
+                    {
+                        gko_log(WARNING, "readall timeout");
+                        return -1;
+                    }
+                }
+                else
+                {
+                    b_read += n;
+                }
+            }
+
         }
     }
+
     return b_read;
 }
 
@@ -575,7 +772,7 @@ int sendblocks(int out_fd, s_job_t * jo, GKO_INT64 start, GKO_INT64 num)
         {
             if (sendfileall(out_fd, fd, &offset, &file_left) != 0)
             {
-                gko_log(WARNING, "sendfileall error");
+//                gko_log(NOTICE, "sendfileall error");
                 close(fd);
                 fd = -1;
                 return -1;
@@ -592,7 +789,7 @@ int sendblocks(int out_fd, s_job_t * jo, GKO_INT64 start, GKO_INT64 num)
         {
             if (sendfileall(out_fd, fd, &offset, &file_left) != 0)
             {
-                gko_log(WARNING, "sendfileall error");
+//                gko_log(NOTICE, "sendfileall error");
                 close(fd);
                 fd = -1;
                 return -1;
@@ -610,7 +807,7 @@ int sendblocks(int out_fd, s_job_t * jo, GKO_INT64 start, GKO_INT64 num)
         { /**block_left < file_left**/
             if (sendfileall(out_fd, fd, &offset, &block_left) != 0)
             {
-                gko_log(WARNING, "sendfileall error");
+//                gko_log(NOTICE, "sendfileall error");
                 close(fd);
                 fd = -1;
                 return -1;
@@ -690,10 +887,10 @@ int sendcmd(s_host_t *h, const char * cmd, int recv_sec, int send_sec)
     sock = connect_host(h, recv_sec, send_sec);
     if (sock < 0)
     {
-        gko_log(WARNING, "sendcmd() connect_host error");
+//        gko_log(NOTICE, "sendcmd() connect_host error");
         return -1;
     }
-    result = sendall(sock, cmd, strlen(cmd), 0);
+    result = sendall(sock, cmd, strlen(cmd), send_sec);
     close_socket(sock);
     return result;
 }

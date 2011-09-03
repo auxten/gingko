@@ -186,7 +186,7 @@ int connect_host(s_host_t * h, int recv_sec, int send_sec)
     (void) getsockopt(sock, SOL_SOCKET, SO_ERROR, &res, &res_size);
     if (CONNECT_DEST_DOWN(res))
     {
-        gko_log(NOTICE, "connect dest is down errno: %d", res);
+//        gko_log(NOTICE, "connect dest is down errno: %d", res);
         ret = HOST_DOWN_FAIL;
         goto CONNECT_END;
     }
@@ -241,13 +241,13 @@ int close_socket(int sock)
     ///      gko_log(WARNING, "shutdown sock error");
     ///      return -1;
     ///  }
-    struct linger so_linger;
-    so_linger.l_onoff = 1; /// close right now, no time_wait at serv
-    so_linger.l_linger = 0; /// at most wait for 1s
-    if (FAIL_CHECK(setsockopt(sock, SOL_SOCKET, SO_LINGER, &so_linger, sizeof(so_linger))))
-    {
-        gko_log(WARNING, "set so_linger failed");
-    }
+//    struct linger so_linger;
+//    so_linger.l_onoff = 1; /// close right now, no time_wait at serv
+//    so_linger.l_linger = 0; /// at most wait for 1s
+//    if (FAIL_CHECK(setsockopt(sock, SOL_SOCKET, SO_LINGER, &so_linger, sizeof(so_linger))))
+//    {
+//        gko_log(WARNING, "set so_linger failed");
+//    }
     if (FAIL_CHECK(close(sock)))
     {
         gko_log(WARNING, "close sock error");

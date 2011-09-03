@@ -107,8 +107,8 @@ GKO_STATIC_FUNC void * get_blocks_s(void * uri, int fd)
     GKO_INT64 start = atol(arg_array[2]);
     GKO_INT64 count = atol(arg_array[3]);
 #ifdef GINGKO_SERV
-    extern map<string, s_job_t *> g_m_jobs;
-    string uri_string(arg_array[1]);
+    extern std::map<std::string, s_job_t *> g_m_jobs;
+    std::string uri_string(arg_array[1]);
     pthread_mutex_lock(&g_grand_lock);
     if (g_m_jobs.find(uri_string) == g_m_jobs.end())
     {
@@ -153,15 +153,15 @@ GKO_STATIC_FUNC void * get_blocks_s(void * uri, int fd)
 #endif /** GINGKO_SERV **/
     block_have = i;
     snprintf(msg, MSG_LEN, "HAVE\t%lld", block_have);
-    if ((i = sendall(fd, msg, MSG_LEN, 0)) < 0)
+    if ((i = sendall(fd, msg, MSG_LEN, SNDBLK_TIMEOUT)) < 0)
     {
-        gko_log(NOTICE, "sent: %lld", i);
         gko_log(WARNING, "sending HAVE error!");
+        return (void *) -1;
     }
     if ((i = sendblocks(fd, jo, start, block_have)) < 0)
     {
-        gko_log(NOTICE, "sendblocks: %lld", i);
-        gko_log(WARNING, "sendblocks error!");
+//        gko_log(NOTICE, "sendblocks error!");
+        return (void *) -1;
     }
     return (void *) 0;
 }
@@ -177,9 +177,8 @@ GKO_STATIC_FUNC void * get_blocks_s(void * uri, int fd)
 GKO_STATIC_FUNC void * helo_serv_s(void * uri, int fd)
 {
     int i;
-    if ((i = sendall(fd, "HI", 2, 0)) < 0)
+    if ((i = sendall(fd, "HI", 2, SND_TIMEOUT)) < 0)
     {
-        gko_log(NOTICE, "sent: %d", i);
         gko_log(WARNING, "sending HI error!");
     }
     return (void *) 0;
@@ -197,15 +196,15 @@ GKO_STATIC_FUNC void * join_job_s(void * uri, int fd)
 {
     int i;
 #ifdef GINGKO_SERV
-    extern map<string, s_job_t *> g_m_jobs;
+    extern std::map<std::string, s_job_t *> g_m_jobs;
     s_job_t *jo;
     s_host_t h;
     memset(&h, 0, sizeof(h));
     char * arg_array[4];
     char * c_uri = (char *) uri;
     s_host_t * host_array;
-    map<string, s_job_t *>::iterator it;
-    set<s_host_t>::iterator host_it;
+    std::map<std::string, s_job_t *>::iterator it;
+    std::set<s_host_t>::iterator host_it;
     hash_worker_thread_arg arg[XOR_HASH_TNUM];
     gko_log(NOTICE, "join_job %s", c_uri);
     /// req fields seperated by \t
@@ -214,7 +213,7 @@ GKO_STATIC_FUNC void * join_job_s(void * uri, int fd)
         gko_log(WARNING, "Wrong JOIN cmd: %s", c_uri);
         return (void *) -1;
     }
-    string uri_string((char *) (arg_array[1]));
+    std::string uri_string((char *) (arg_array[1]));
     gko_log(NOTICE, "%s", uri_string.c_str());
 
     strncpy(h.addr, arg_array[2], IP_LEN);
@@ -242,7 +241,13 @@ GKO_STATIC_FUNC void * join_job_s(void * uri, int fd)
             }
         }
         g_job_lock[i].state = LK_USING;
-        jo = (s_job_t *) calloc(1, sizeof(s_job_t));
+        jo = new s_job_t;
+        if(!jo)
+        {
+            gko_log(FATAL, "new s_job_t failed");
+            return (void *) -1;
+        }
+        memset(jo, 0, sizeof(s_job_t));
         jo->lock_id = i;
         g_m_jobs[uri_string] = jo;
 
@@ -251,7 +256,7 @@ GKO_STATIC_FUNC void * join_job_s(void * uri, int fd)
         pthread_mutex_lock(&g_job_lock[jo->lock_id].lock);
         strncpy(jo->uri, arg_array[1], MAX_URI);
         strncpy(jo->path, arg_array[1], MAX_PATH_LEN);
-        jo->host_set = new set<s_host_t>;
+        jo->host_set = new std::set<s_host_t>;
         (*jo->host_set).insert(h);
         jo->host_num = (*jo->host_set).size();
         gko_log(NOTICE, "new host join, host_num: %d", jo->host_num);
@@ -314,38 +319,42 @@ GKO_STATIC_FUNC void * join_job_s(void * uri, int fd)
     /**
      * send known host
      **/
-    host_array = (s_host_t *) calloc(jo->host_num , sizeof(s_host_t));
+
+    int tmp_host_num = jo->host_num;
+    host_array = new s_host_t[tmp_host_num];
     if (!host_array)
     {
-        gko_log(WARNING, "calloc host_array failed");
+        gko_log(FATAL, "new host_array failed");
+        return (void *) -1;
     }
+    memset(host_array, 0, sizeof(s_host_t) * tmp_host_num);
     ///copy the set to array So called "Serialize"
     int i_a = 0;
-    for (set<s_host_t>::iterator i = (*(jo->host_set)).begin(); i
+    for (std::set<s_host_t>::iterator i = (*(jo->host_set)).begin(); i
             != (*(jo->host_set)).end(); i++)
     {
         memcpy(host_array + i_a, &(*i), sizeof(s_host_t));
-        if(++i_a >= jo->host_num)
+        if(++i_a >= tmp_host_num)
         {
             break;
         }
     }
     //copy((*(jo->host_set)).begin(), (*(jo->host_set)).begin() + jo->host_num, host_array);
     if ((i = sendall(fd, (const void *) (host_array),
-            jo->host_num * sizeof(s_host_t), 0)) < 0)
+            tmp_host_num * sizeof(s_host_t), 0)) < 0)
     {
         gko_log(WARNING, "sending host_set error!");
     }
-    free(host_array);
+
+    delete [] host_array;
     host_array = NULL;
 
 
 #else
     extern s_job_t g_job;
     memset(&g_job, 0, sizeof(s_job_t));
-    if ((i = sendall(fd, (const void *) (&g_job), sizeof(s_job_t), 0)) < 0)
+    if ((i = sendall(fd, (const void *) (&g_job), sizeof(s_job_t), SNDBLK_TIMEOUT)) < 0)
     {
-        gko_log(NOTICE, "sent: %d", i);
         gko_log(WARNING, "sending s_job_t error!");
     }
 #endif /** GINGKO_SERV **/
@@ -414,13 +423,13 @@ GKO_STATIC_FUNC void * new_host_s(void * uri, int fd)
 GKO_STATIC_FUNC void * dead_host_s(void * uri, int fd)
 {
 #ifdef GINGKO_SERV
-    extern map<string, s_job_t *> g_m_jobs;
+    extern std::map<std::string, s_job_t *> g_m_jobs;
     s_job_t *jo;
     s_host_t h;
     memset(&h, 0, sizeof(h));
     char * arg_array[4];
     char * c_uri = (char *) uri;
-    map<string, s_job_t *>::iterator it;
+    std::map<std::string, s_job_t *>::iterator it;
     gko_log(NOTICE, "dead_host %s", c_uri);
     /// req fields seperated by \t
     if (sep_arg(c_uri, arg_array, 4) != 4)
@@ -429,7 +438,7 @@ GKO_STATIC_FUNC void * dead_host_s(void * uri, int fd)
         return (void *) -1;
     }
 
-    string uri_string((char *) (arg_array[1]));
+    std::string uri_string((char *) (arg_array[1]));
     gko_log(NOTICE, "%s", uri_string.c_str());
 
     strncpy(h.addr, arg_array[2], IP_LEN);
@@ -445,12 +454,13 @@ GKO_STATIC_FUNC void * dead_host_s(void * uri, int fd)
             pthread_mutex_lock(&g_job_lock[jo->lock_id].lock);
             (*jo->host_set).erase(h);
             jo->host_num = (*jo->host_set).size();
-            s_host_t * host_array = (s_host_t *) calloc(jo->host_num + 1,
-                    sizeof(s_host_t));
+            s_host_t * host_array = new s_host_t[jo->host_num + 1];
             if (!host_array)
             {
-                gko_log(WARNING, "calloc host_array failed");
+                gko_log(FATAL, "new host_array failed");
+                return (void *) -1;
             }
+            memset(host_array, 0, sizeof(s_host_t) * (jo->host_num + 1));
             copy((*(jo->host_set)).begin(), (*(jo->host_set)).end(), host_array);
             pthread_mutex_unlock(&g_job_lock[jo->lock_id].lock);
             gko_log(NOTICE, "g_job: %s, host_num: %d", jo->uri, jo->host_num);
@@ -477,7 +487,8 @@ GKO_STATIC_FUNC void * dead_host_s(void * uri, int fd)
                     p_h++;
                 }
             }
-            free(host_array);
+
+            delete [] host_array;
             host_array = NULL;
         }
     }
@@ -504,13 +515,13 @@ GKO_STATIC_FUNC void * dead_host_s(void * uri, int fd)
 GKO_STATIC_FUNC void * quit_job_s(void * uri, int fd)
 {
 #ifdef GINGKO_SERV
-    extern map<string, s_job_t *> g_m_jobs;
+    extern std::map<std::string, s_job_t *> g_m_jobs;
     s_job_t *jo;
     s_host_t h;
     memset(&h, 0, sizeof(h));
     char * arg_array[4];
     char * c_uri = (char *) uri;
-    map<string, s_job_t *>::iterator it;
+    std::map<std::string, s_job_t *>::iterator it;
     gko_log(NOTICE, "quit_job %s", c_uri);
     /// req fields seperated by \t
     if (sep_arg(c_uri, arg_array, 4) != 4)
@@ -519,7 +530,7 @@ GKO_STATIC_FUNC void * quit_job_s(void * uri, int fd)
         return (void *) -1;
     }
 
-    string uri_string((char *) (arg_array[1]));
+    std::string uri_string((char *) (arg_array[1]));
     gko_log(NOTICE, "%s", uri_string.c_str());
 
     strncpy(h.addr, arg_array[2], IP_LEN);
@@ -535,12 +546,13 @@ GKO_STATIC_FUNC void * quit_job_s(void * uri, int fd)
         {/** the host is in this g_job host_set **/
             (*jo->host_set).erase(h);
             jo->host_num = (*jo->host_set).size();
-            s_host_t * host_array = (s_host_t *) calloc(jo->host_num + 1,
-                    sizeof(s_host_t));
+            s_host_t * host_array = new s_host_t[jo->host_num + 1];
             if (!host_array)
             {
-                gko_log(FATAL, "calloc host_array failed");
+                gko_log(FATAL, "new host_array failed");
+                return (void *) -1;
             }
+            memset(host_array, 0, sizeof(s_host_t) * (jo->host_num + 1));
             copy((*(jo->host_set)).begin(), (*(jo->host_set)).end(), host_array);
             pthread_mutex_unlock(&g_job_lock[jo->lock_id].lock);
             gko_log(NOTICE, "g_job: %s, host_num: %d", jo->uri, jo->host_num);
@@ -567,7 +579,7 @@ GKO_STATIC_FUNC void * quit_job_s(void * uri, int fd)
                     p_h++;
                 }
             }
-            free(host_array);
+            delete [] host_array;
             host_array = NULL;
         }
         else
@@ -662,9 +674,15 @@ GKO_STATIC_FUNC void * erase_job_s(void * uri, int fd)
         return (void *) -1;
     }
 
-    string uri_string(arg_array[1]);
-    erase_job(uri_string);
-    snprintf(msg, SHORT_MSG_LEN, "ERSE\t%s\tSUCCED", arg_array[1]);
+    std::string uri_string(arg_array[1]);
+    if (erase_job(uri_string) == 0)
+    {
+        snprintf(msg, SHORT_MSG_LEN, "ERSE\tSUCCED");
+    }
+    else
+    {
+        snprintf(msg, SHORT_MSG_LEN, "NO\tMATCH\tSEED");
+    }
     sendall(fd, msg, SHORT_MSG_LEN, 0);
 #else
     gko_log(WARNING, "got ERSE cmd on client: %s", (char *) uri);

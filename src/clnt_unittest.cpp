@@ -84,7 +84,6 @@ s_gingko_global_t gko;
 GINGKO_OVERLOAD_S_HOST_LT
 GINGKO_OVERLOAD_S_HOST_EQ
 
-using namespace std;
 
 int clnt_unittest_init()
 {
