@@ -11,14 +11,6 @@
 
 /// shift Macro
 #define ROLL(h) (((h) << 7) ^ ((h) >> 25))
-/// arguments for thread
-typedef struct
-{
-    GKO_INT64 range[2];
-    s_job_t * p;
-    u_char * buf;
-    int index;
-} hash_worker_thread_arg;
 
 /// xor hash a given length buf
 unsigned xor_hash(const void *key, int len, unsigned hval);

@@ -56,6 +56,7 @@
 #include "socket.h"
 #include "limit.h"
 #include "job_state.h"
+#include "progress.h"
 #include "gingko_clnt.h"
 
 /************** PTHREAD STUFF **************/
@@ -65,10 +66,13 @@
 extern pthread_mutex_t g_clnt_lock;
 ///block host set lock
 extern pthread_mutex_t g_blk_hostset_lock;
+///mutex for gko.hosts_del_noready
+extern pthread_mutex_t g_hosts_del_noready_mutex;
 /************** PTHREAD STUFF **************/
 //
 //
 GINGKO_OVERLOAD_S_HOST_LT
+GINGKO_OVERLOAD_S_HOST_EQ
 
 //
 /// the g_job assoiate with the client
@@ -108,7 +112,7 @@ s_host_hash_result_t * host_hash(s_job_t * jo, const s_host_t * new_host,
                     : 1;
     gko_log(NOTICE, "host_key: %lld, ip: %s, port: %d, usage: %d", host_key,
             new_host->addr, new_host->port, usage);
-    GKO_UINT64 vnode_start = host_key % (jo->block_count);
+    GKO_UINT64 vnode_start = host_key % (jo->block_count + 991); //max prime number in 1000
     gko_log(NOTICE, "vnode_distance:%lld, vnode_start:%lld", vnode_distance,
             vnode_start);
     for (int i = 0; i < VNODE_NUM; i++)
@@ -182,11 +186,14 @@ GKO_INT64 get_blocks_c(s_job_t * jo, s_host_t * dhost, GKO_INT64 num, GKO_INT64 
     GKO_INT64 j;
     GKO_INT64 ret;
     ssize_t counter;
+    int rcv_have_time = RCVHAVE_TIMEOUT;
     char msg[MSG_LEN] = {'\0'};
     char * arg_array[4];
     GKO_INT64 n_to_recv;
+    static s_host_t last_dead = {{'\0'}, 0};
+
     sock = connect_host(dhost, RCV_TIMEOUT, SND_TIMEOUT);
-    if (FAIL_CHECK(sock == HOST_DOWN_FAIL))
+    if (FAIL_CHECK(sock == HOST_DOWN_FAIL && !(*dhost == gko.the_serv)))
     {
         /** the remote host maybe down, tell the server **/
         snprintf(msg, MSG_LEN, "DEAD\t%s\t%s\t%u", jo->uri, dhost->addr,
@@ -195,6 +202,33 @@ GKO_INT64 get_blocks_c(s_job_t * jo, s_host_t * dhost, GKO_INT64 num, GKO_INT64 
         if (FAIL_CHECK(sendcmd(&gko.the_serv, msg, RCV_TIMEOUT, SND_TIMEOUT)))
         {
             gko_log(WARNING, "sendcmd host_down_cmd failed");
+        }
+        /** if same host was known dead twice in a line, del it **/
+        if (*dhost == last_dead)
+        {
+            if (gko.ready_to_serv)
+            {
+                /**
+                 * when gko.ready_to_serv del the host
+                 **/
+                pthread_mutex_lock(&g_clnt_lock);
+                (*(g_job.host_set)).erase(last_dead);
+                pthread_mutex_unlock(&g_clnt_lock);
+                host_hash(&g_job, &last_dead, NULL, DEL_HOST);
+                gko_log(NOTICE, "host %s:%u dead twice in a line, deleted",
+                        last_dead.addr, last_dead.port);
+
+            }
+            else
+            {
+                pthread_mutex_lock(&g_hosts_del_noready_mutex);
+                gko.hosts_del_noready.push_back(last_dead);
+                pthread_mutex_unlock(&g_hosts_del_noready_mutex);
+            }
+        }
+        else
+        {
+            memcpy(&last_dead, dhost, sizeof(s_host_t));
         }
     }
     if (FAIL_CHECK(sock < 0))
@@ -206,6 +240,7 @@ GKO_INT64 get_blocks_c(s_job_t * jo, s_host_t * dhost, GKO_INT64 num, GKO_INT64 
      * send "GETT uri start num" to server
      **/
     snprintf(msg, MSG_LEN, "GETT\t%s\t%lld\t%lld", g_job.uri, num, count);
+    gko_log(DEBUG, "%s", msg);
     if (FAIL_CHECK((j = sendall(sock, msg, MSG_LEN, SND_TIMEOUT)) < 0))
     {
         gko_log(WARNING, "sending '%s' to %s:%u error %!", msg, dhost->addr, dhost->port, j);
@@ -215,12 +250,17 @@ GKO_INT64 get_blocks_c(s_job_t * jo, s_host_t * dhost, GKO_INT64 num, GKO_INT64 
     /**
      * server will send "HAVA n"
      **/
-    if (readall(sock, msg, sizeof(msg), RCVBLK_TIMEOUT) < 0)
+    if (*dhost == gko.the_serv)
+    {
+        rcv_have_time = RCVSERV_HAVE_TIMEOUT;
+    }
+    if (readall(sock, msg, sizeof(msg), rcv_have_time) < 0)
     {
         gko_log(WARNING, "read HAVE failed", msg);
         ret = -1;
         goto GET_BLKS_C_CLOSE_SOCK;
     }
+    gko_log(DEBUG, "%s", msg);
     if (FAIL_CHECK(sep_arg(msg, arg_array, 2) != 2))
     {
         gko_log(WARNING, "Wrong HAVE cmd: %s", msg);
@@ -262,7 +302,6 @@ GKO_INT64 get_blocks_c(s_job_t * jo, s_host_t * dhost, GKO_INT64 num, GKO_INT64 
             break;
         }
         ///usleep(100);
-        bw_down_limit(counter, gko.opt.limit_down_rate);
     }
     ret = blk_got;
 
@@ -282,7 +321,6 @@ GET_BLKS_C_CLOSE_SOCK:
 int helo_serv_c(void * arg, int fd, s_host_t * server)
 {
     int sock;
-    int j;
     int ret;
     int select_ret;
     int res;
@@ -293,12 +331,16 @@ int helo_serv_c(void * arg, int fd, s_host_t * server)
     struct timeval recv_timeout;
     struct timeval send_timeout;
     struct sockaddr_in seed_addr;///source addr_in
-    recv_timeout.tv_sec = RCV_TIMEOUT;
+    recv_timeout.tv_sec = RCVHI_TIMEOUT;
     recv_timeout.tv_usec = 0;
-    send_timeout.tv_sec = SND_TIMEOUT;
+    send_timeout.tv_sec = SNDHELO_TIMEOUT;
     send_timeout.tv_usec = 0;
     in_addr_t serv;
     int addr_len;
+#if HAVE_POLL
+#else
+    fd_set wset;
+#endif
 
     addr_len = getaddr_my(server->addr, &serv);
     if (!addr_len)
@@ -375,14 +417,14 @@ int helo_serv_c(void * arg, int fd, s_host_t * server)
 #endif /* HAVE_POLL */
     if (select_ret < 0)
     {
-        gko_log(FATAL, "select error on helo");
-        ret = -1;
+        gko_log(WARNING, "poll/select error on helo");
+        ret = HOST_DOWN_FAIL;
         goto HELO_SERV_C_CLOSE_SOCK;
     }
     else if (!select_ret)
     {
-        gko_log(FATAL, "connect timeout on helo");
-        ret = -1;
+        gko_log(NOTICE, "connect timeout on helo");
+        ret = HOST_DOWN_FAIL;
         goto HELO_SERV_C_CLOSE_SOCK;
     }
 
@@ -390,7 +432,7 @@ int helo_serv_c(void * arg, int fd, s_host_t * server)
                      SO_ERROR, &res, &res_size);
     if(CONNECT_DEST_DOWN(res))
     {
-        gko_log(WARNING, "SO_ERROR: %d", res);
+        gko_log(WARNING, "CONNECT_DEST_DOWN: %d", res);
         ret = HOST_DOWN_FAIL;
         goto HELO_SERV_C_CLOSE_SOCK;
     }
@@ -405,20 +447,20 @@ int helo_serv_c(void * arg, int fd, s_host_t * server)
 
     ///get the sockaddr and port
     /// say HELO expect HI
-    if (FAIL_CHECK((j = sendall(sock, "HELO", 4, SND_TIMEOUT)) < 0))
+    if (FAIL_CHECK(sendall(sock, "HELO", 4, SNDHELO_TIMEOUT) < 0))
     {
         gko_log(WARNING, "sendall HELO error");
         ret = -1;
         goto HELO_SERV_C_CLOSE_SOCK;
 
     }
-    if (readall(sock, msg, sizeof(msg), RCV_TIMEOUT) < 0)
+    if (readall(sock, msg, sizeof(msg), RCVHI_TIMEOUT) < 0)
     {
         gko_log(WARNING, "read HI from serv failed");
         ret = -1;
         goto HELO_SERV_C_CLOSE_SOCK;
     }
-    if (-1 == getsockname(sock, &addr, &sock_len))
+    if (getsockname(sock, &addr, &sock_len) < 0)
     {
         gko_log(WARNING, "getsockname error");
         ret = -1;
@@ -447,19 +489,19 @@ HELO_SERV_C_CLOSE_SOCK:
  * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-static int broadcast_join(s_host_t * host_array, s_host_t *h)
-{
-    s_host_t * p_h = host_array;
-    char buf[SHORT_MSG_LEN] =
-        { '\0' };
-    snprintf(buf, SHORT_MSG_LEN, "NEWW\t%s\t%d", h->addr, h->port);
-    while (p_h->port)
-    {
-        sendcmd(p_h, buf, 2, 2);
-        p_h++;
-    }
-    return 0;
-}
+//static int broadcast_join(s_host_t * host_array, s_host_t *h)
+//{
+//    s_host_t * p_h = host_array;
+//    char buf[SHORT_MSG_LEN] =
+//        { '\0' };
+//    snprintf(buf, SHORT_MSG_LEN, "NEWW\t%s\t%d", h->addr, h->port);
+//    while (p_h->port)
+//    {
+//        sendcmd(p_h, buf, 2, 2);
+//        p_h++;
+//    }
+//    return 0;
+//}
 
 /**
  * @brief send JOIN handler
@@ -474,60 +516,90 @@ void * join_job_c(void * arg, int fd)
     char msg[MSG_LEN] = {'\0'};
     int sock;
     int j;
+    int retry = 0;
     void * ret;
-    char * client_local_path = new char[MAX_PATH_LEN];
-    if (!client_local_path)
-    {
-        gko_log(FATAL, "new client_local_path failed");
-        return (void *) -1;
-    }
-    memset(client_local_path, 0, MAX_PATH_LEN);
+    char * client_local_path = NULL;
+    GKO_INT64 percent = 0;
+    s_host_t * host_buf = NULL;
+    unsigned hkey = xor_hash(&gko.the_clnt, sizeof(gko.the_clnt), 0);
 
-    s_host_t * host_buf;
-    char broadcast_buf[SHORT_MSG_LEN] =
-        { '\0' };
     snprintf(msg, MAX_URI, "JOIN\t%s\t%s\t%d", g_job.uri, gko.the_clnt.addr,
             gko.the_clnt.port);
-    sock = connect_host(&gko.the_serv, 10, SND_TIMEOUT);
-    if (sock < 0)
-    {
-        gko_log(WARNING, "connect_host error");
-        delete [] client_local_path;
-        client_local_path = NULL;
-        return (void *) -1;
-    }
 
-    if ((j = sendall(sock, msg, MSG_LEN, SND_TIMEOUT)) < 0)
-    {
-        gko_log(WARNING, "sending JOIN error!");
-        ret = (void *) -1;
-        goto JOIN_JOB_C_CLOSE_SOCK;
-    }
-    gko_log(NOTICE, "waiting for join job...");
-    /**
-     * readall the hash progress info until it's 100
-     **/
-    GKO_INT64 percent;
     do
     {
-        if (readall(sock, &percent, sizeof(percent), RCVPROGRESS_TIMEOUT) < 0)
+        if (retry >= MAX_JOIN_RETRY)
         {
-            gko_log(WARNING, "readall progress error!");
+            gko_log(FATAL, "join job retry %d time fail", MAX_JOIN_RETRY);
             ret = (void *) -1;
             goto JOIN_JOB_C_CLOSE_SOCK;
         }
-        gko_log(NOTICE, "make seed progress: %lld\%", percent);
+        sock = connect_host(&gko.the_serv, 10, SND_TIMEOUT);
+        if (sock < 0)
+        {
+            gko_log(WARNING, "connect_host error");
+            retry ++;
+            continue;
+        }
+        else
+        {
+            retry = 0;
+        }
+
+        if (sendall(sock, msg, MSG_LEN, SND_TIMEOUT) < 0)
+        {
+            gko_log(WARNING, "sending JOIN error!");
+            retry ++;
+            close_socket(sock);
+            continue;
+        }
+        else
+        {
+            retry = 0;
+        }
+        gko_log(DEBUG, "%s", msg);
+
+        /**
+         * readall the hash progress info until it's 100
+         **/
+        percent = 0;
+        if (readall(sock, &percent, sizeof(percent), RCVPROGRESS_TIMEOUT) < 0)
+        {
+            gko_log(WARNING, "readall progress error!");
+            retry ++;
+            close_socket(sock);
+            continue;
+        }
+        else
+        {
+            retry = 0;
+        }
+
+        gko_log(NOTICE, "make seed progress: %lld%%", percent);
+        if (percent != 100)
+        {
+            close_socket(sock);
+            usleep((hkey % 8) * 1000000 + 2000000);
+        }
     } while (percent != 100);
 
     /**
      * store the local path, recover it after readall the g_job struct
      **/
+    client_local_path = new char[MAX_PATH_LEN];
+    if (!client_local_path)
+    {
+        gko_log(FATAL, "new client_local_path failed");
+        ret = (void *) -1;
+        goto JOIN_JOB_C_CLOSE_SOCK;
+    }
+    memset(client_local_path, 0, MAX_PATH_LEN);
     strncpy(client_local_path, g_job.path, MAX_PATH_LEN);
 
     /**
      *  read and init some struct from serv
      **/
-    j = readall(sock, (void *) (&g_job), sizeof(g_job), RCVBLK_TIMEOUT);
+    j = readall(sock, (void *) (&g_job), sizeof(g_job), RCVJOB_TIMEOUT);
     if (j < 0)
     {
         gko_log(WARNING, "read g_job from server error!");
@@ -537,6 +609,7 @@ void * join_job_c(void * arg, int fd)
     gko_log(NOTICE, "g_job have read %d of %ld", j, sizeof(g_job));
     strncpy(g_job.path, client_local_path, MAX_PATH_LEN);
     gko_log(NOTICE, "g_job.file_count %lld", g_job.file_count);
+
     switch (g_job.job_state)
     {
         case JOB_FILE_TYPE_ERR:
@@ -607,77 +680,83 @@ void * join_job_c(void * arg, int fd)
             goto JOIN_JOB_C_CLOSE_SOCK;
         }
         gko_log(NOTICE, "blocks seed have read %d of %lld", j, g_job.blocks_size);
-    }
-
-    ///read hosts
-    host_buf = new s_host_t[g_job.host_num + 1];
-    if (!host_buf)
-    {
-        gko_log(FATAL, "s_host_t buf new failed");
-        ret = (void *) -2;
-        goto JOIN_JOB_C_CLOSE_SOCK;
-    }
-    memset(host_buf, 0, sizeof(s_host_t)*(g_job.host_num + 1));
-    j = readall(sock, host_buf, g_job.host_num * sizeof(s_host_t), RCVBLK_TIMEOUT);
-    if (j < 0)
-    {
-        gko_log(FATAL, "read host list from server failed");
-        ret = (void *) -2;
-        goto JOIN_JOB_C_CLOSE_SOCK;
-    }
-    gko_log(NOTICE, "hosts have read %d of %ld", j, g_job.host_num * sizeof(s_host_t));
-
-    ///put hosts into g_job.host_set
-    g_job.host_set = new std::set<s_host_t> ;
-    pthread_mutex_lock(&g_clnt_lock);
-    (*(g_job.host_set)).insert(host_buf, host_buf + g_job.host_num);
-    pthread_mutex_unlock(&g_clnt_lock);
-
-    delete [] host_buf;
-    host_buf = NULL;
-
-    snprintf(broadcast_buf, SHORT_MSG_LEN, "NEWW\t%s\t%d", gko.the_clnt.addr, gko.the_clnt.port);
-    for (std::set<s_host_t>::iterator i = (*(g_job.host_set)).begin(); i
-            != (*(g_job.host_set)).end(); i++)
-    {
-        sendcmd((s_host_t *)&(*i), broadcast_buf, 2, 2);
-    }
-    /// put the known host in the hash ring
-    pthread_mutex_lock(&g_clnt_lock);
-    for (std::set<s_host_t>::iterator i = (*(g_job.host_set)).begin(); i
-            != (*(g_job.host_set)).end(); i++)
-    {
-        gko_log(NOTICE, "host in set:%s %d", i->addr, i->port);
-        host_hash(&g_job, &(*i), NULL, ADD_HOST);
-    }
-    pthread_mutex_unlock(&g_clnt_lock);
-    ///	if (g_job.file_count) {
-    ///		printf("host_num:%d, uri:%s, file1:%s, HOST:%s", g_job.host_num,
-    ///				g_job.uri, g_job.files->name, ((*(g_job.host_set)).begin())->addr);
-    ///	}
-    gko_log(NOTICE, "g_job.block_count: %lld", g_job.block_count);
-    if (g_job.block_count)
-    {
-        pthread_mutex_lock(&g_blk_hostset_lock);
-        for (j = 0; j < g_job.block_count; j++)
+        for (GKO_INT64 i = 0; i < g_job.block_count; i++)
         {
-            if ((g_job.blocks + j)->host_set)
+            gko_log(DEBUG, "block %lld digest: %u", i, (g_job.blocks + i)->digest);
+        }
+    }
+
+    {
+        ///read hosts
+        host_buf = new s_host_t[g_job.host_num + 1];
+        if (!host_buf)
+        {
+            gko_log(FATAL, "s_host_t buf new failed");
+            ret = (void *) -2;
+            goto JOIN_JOB_C_CLOSE_SOCK;
+        }
+        memset(host_buf, 0, sizeof(s_host_t)*(g_job.host_num + 1));
+        j = readall(sock, host_buf, g_job.host_num * sizeof(s_host_t), RCVBLK_TIMEOUT);
+        if (j < 0)
+        {
+            gko_log(FATAL, "read host list from server failed");
+            ret = (void *) -2;
+            goto JOIN_JOB_C_CLOSE_SOCK;
+        }
+        gko_log(NOTICE, "hosts have read %d of %ld", j, g_job.host_num * sizeof(s_host_t));
+
+        ///put hosts into g_job.host_set
+        g_job.host_set = new std::set<s_host_t> ;
+        pthread_mutex_lock(&g_clnt_lock);
+        (*(g_job.host_set)).insert(host_buf, host_buf + g_job.host_num);
+        pthread_mutex_unlock(&g_clnt_lock);
+    }
+
+    {
+        /// put the known host in the hash ring
+        pthread_mutex_lock(&g_clnt_lock);
+        for (std::set<s_host_t>::iterator i = (*(g_job.host_set)).begin(); i
+                != (*(g_job.host_set)).end(); i++)
+        {
+            gko_log(NOTICE, "host in set:%s %d", i->addr, i->port);
+            host_hash(&g_job, &(*i), NULL, ADD_HOST);
+        }
+        pthread_mutex_unlock(&g_clnt_lock);
+    }
+
+    {
+        gko_log(NOTICE, "g_job.block_count: %lld", g_job.block_count);
+        if (g_job.block_count)
+        {
+            pthread_mutex_lock(&g_blk_hostset_lock);
+            for (j = 0; j < g_job.block_count; j++)
             {
-                for (std::set<s_host_t>::iterator it =
-                    (*((g_job.blocks + j)->host_set)).begin(); it
-                        != (*((g_job.blocks + j)->host_set)).end(); it++)
+                if ((g_job.blocks + j)->host_set)
                 {
-                    gko_log(NOTICE, "%d %s:%d", j, it->addr, it->port);
+                    for (std::set<s_host_t>::iterator it =
+                        (*((g_job.blocks + j)->host_set)).begin(); it
+                            != (*((g_job.blocks + j)->host_set)).end(); it++)
+                    {
+                        gko_log(NOTICE, "%d %s:%d", j, it->addr, it->port);
+                    }
                 }
             }
+            pthread_mutex_unlock(&g_blk_hostset_lock);
         }
-        pthread_mutex_unlock(&g_blk_hostset_lock);
     }
     ret = (void *) 0;
 
 JOIN_JOB_C_CLOSE_SOCK:
-    delete [] client_local_path;
-    client_local_path = NULL;
+    if (client_local_path)
+    {
+        delete [] client_local_path;
+        client_local_path = NULL;
+    }
+    if (host_buf)
+    {
+        delete [] host_buf;
+        host_buf = NULL;
+    }
     close_socket(sock);
     return ret;
 }
@@ -704,6 +783,6 @@ int quit_job_c(s_host_t * quit_host, s_host_t * server, char * uri)
         gko_log(NOTICE, "sending quit message failed");
     }
 
-    ///printf("sent: %s", msg);
+    gko_log(DEBUG, "%s", msg);
     return 0;
 }

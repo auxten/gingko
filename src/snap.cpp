@@ -117,5 +117,6 @@ int load_snap(s_job_t * jo)
     }
     delete [] snap_buf;
     snap_buf = NULL;
+
     return 0;
 }

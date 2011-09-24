@@ -54,10 +54,10 @@ am_clnt_unittest_OBJECTS = async_threads.$(OBJEXT) \
 	async_conn.$(OBJEXT) gingko_base.$(OBJEXT) path.$(OBJEXT) \
 	log.$(OBJEXT) option.$(OBJEXT) socket.$(OBJEXT) \
 	limit.$(OBJEXT) route.$(OBJEXT) snap.$(OBJEXT) \
-	clnt_unittest.$(OBJEXT) gingko_clnt.$(OBJEXT)
+	clnt_unittest.$(OBJEXT) gingko_clnt.$(OBJEXT) \
+	progress.$(OBJEXT)
 clnt_unittest_OBJECTS = $(am_clnt_unittest_OBJECTS)
-clnt_unittest_DEPENDENCIES =  \
-	$(srcdir)/../../../../../../third-64/libev/lib/libev.a \
+clnt_unittest_DEPENDENCIES = $(srcdir)/../lib/libev/lib/libev.a \
 	$(srcdir)/../../../../../../third-64/gtest/lib/libgtest.a \
 	$(srcdir)/hash/libxor_hash.a
 clnt_unittest_LINK = $(CXXLD) $(AM_CXXFLAGS) $(CXXFLAGS) \
@@ -66,10 +66,9 @@ am_gingko_clnt_OBJECTS = async_threads.$(OBJEXT) async_conn.$(OBJEXT) \
 	gingko_clnt.$(OBJEXT) clnt_main.$(OBJEXT) \
 	gingko_base.$(OBJEXT) path.$(OBJEXT) log.$(OBJEXT) \
 	option.$(OBJEXT) socket.$(OBJEXT) limit.$(OBJEXT) \
-	route.$(OBJEXT) snap.$(OBJEXT)
+	route.$(OBJEXT) snap.$(OBJEXT) progress.$(OBJEXT)
 gingko_clnt_OBJECTS = $(am_gingko_clnt_OBJECTS)
-gingko_clnt_DEPENDENCIES =  \
-	$(srcdir)/../../../../../../third-64/libev/lib/libev.a \
+gingko_clnt_DEPENDENCIES = $(srcdir)/../lib/libev/lib/libev.a \
 	$(srcdir)/hash/libxor_hash.a
 gingko_clnt_LINK = $(CXXLD) $(AM_CXXFLAGS) $(CXXFLAGS) \
 	$(gingko_clnt_LDFLAGS) $(LDFLAGS) -o $@
@@ -79,8 +78,7 @@ am_gingko_serv_OBJECTS = async_threads.$(OBJEXT) async_conn.$(OBJEXT) \
 	option.$(OBJEXT) socket.$(OBJEXT) limit.$(OBJEXT) \
 	seed.$(OBJEXT)
 gingko_serv_OBJECTS = $(am_gingko_serv_OBJECTS)
-gingko_serv_DEPENDENCIES =  \
-	$(srcdir)/../../../../../../third-64/libev/lib/libev.a \
+gingko_serv_DEPENDENCIES = $(srcdir)/../lib/libev/lib/libev.a \
 	$(srcdir)/hash/libxor_hash.a
 gingko_serv_LINK = $(CXXLD) $(AM_CXXFLAGS) $(CXXFLAGS) \
 	$(gingko_serv_LDFLAGS) $(LDFLAGS) -o $@
@@ -90,8 +88,7 @@ am_serv_unittest_OBJECTS = async_threads.$(OBJEXT) \
 	limit.$(OBJEXT) seed.$(OBJEXT) xor_hash.$(OBJEXT) \
 	serv_unittest.$(OBJEXT) gingko_serv.$(OBJEXT)
 serv_unittest_OBJECTS = $(am_serv_unittest_OBJECTS)
-serv_unittest_DEPENDENCIES =  \
-	$(srcdir)/../../../../../../third-64/libev/lib/libev.a \
+serv_unittest_DEPENDENCIES = $(srcdir)/../lib/libev/lib/libev.a \
 	$(srcdir)/../../../../../../third-64/gtest/lib/libgtest.a \
 	$(srcdir)/hash/libxor_hash.a
 serv_unittest_LINK = $(CXXLD) $(AM_CXXFLAGS) $(CXXFLAGS) \
@@ -162,7 +159,7 @@ distuninstallcheck_listfiles = find . -type f -print
 distcleancheck_listfiles = find . -type f -print
 ACLOCAL = ${SHELL} /Users/auxten/Documents/Codes/op/oped/noah/tools/gingko/src/missing --run aclocal-1.11
 AMTAR = ${SHELL} /Users/auxten/Documents/Codes/op/oped/noah/tools/gingko/src/missing --run tar
-AM_CXXFLAGS = -ggdb -Wall
+AM_CXXFLAGS = -ggdb -Wall -O0
 AUTOCONF = ${SHELL} /Users/auxten/Documents/Codes/op/oped/noah/tools/gingko/src/missing --run autoconf
 AUTOHEADER = ${SHELL} /Users/auxten/Documents/Codes/op/oped/noah/tools/gingko/src/missing --run autoheader
 AUTOMAKE = ${SHELL} /Users/auxten/Documents/Codes/op/oped/noah/tools/gingko/src/missing --run automake-1.11
@@ -255,20 +252,18 @@ top_builddir = .
 top_srcdir = .
 SUBDIRS = hash .
 INCLUDES = -I$(srcdir)/src\
-    -I$(srcdir)/../../../../../third-64/libev/include \
-    -I$(srcdir)/../../../../../../third-64/libev/include \
-    -I$(srcdir)/../../../../../../../third-64/libev/include \
     -I$(srcdir)/../../../../../third-64/gtest/include \
     -I$(srcdir)/../../../../../../third-64/gtest/include \
     -I$(srcdir)/../../../../../../../third-64/gtest/include \
     -I$(srcdir)/hash \
-    -include config.h
+    -include config.h \
+    -I$(srcdir)/../lib/libev/include 
 
 clnt_unittest_SOURCES = async_threads.cpp async_conn.cpp \
     gingko_base.cpp path.cpp log.cpp option.cpp socket.cpp limit.cpp \
-    route.cpp snap.cpp clnt_unittest.cpp gingko_clnt.cpp
+    route.cpp snap.cpp clnt_unittest.cpp gingko_clnt.cpp progress.cpp
 
-clnt_unittest_LDADD = $(srcdir)/../../../../../../third-64/libev/lib/libev.a \
+clnt_unittest_LDADD = $(srcdir)/../lib/libev/lib/libev.a \
 	$(srcdir)/../../../../../../third-64/gtest/lib/libgtest.a \
     $(srcdir)/hash/libxor_hash.a
 
@@ -277,7 +272,7 @@ serv_unittest_SOURCES = async_threads.cpp async_conn.cpp \
     gingko_base.cpp path.cpp log.cpp option.cpp socket.cpp limit.cpp \
     seed.cpp hash/xor_hash.cpp serv_unittest.cpp gingko_serv.cpp
 
-serv_unittest_LDADD = $(srcdir)/../../../../../../third-64/libev/lib/libev.a \
+serv_unittest_LDADD = $(srcdir)/../lib/libev/lib/libev.a \
 	$(srcdir)/../../../../../../third-64/gtest/lib/libgtest.a \
     $(srcdir)/hash/libxor_hash.a
 
@@ -286,15 +281,15 @@ gingko_serv_SOURCES = async_threads.cpp async_conn.cpp gingko_serv.cpp serv_main
     gingko_base.cpp path.cpp log.cpp option.cpp socket.cpp limit.cpp \
     seed.cpp 
 
-gingko_serv_LDADD = $(srcdir)/../../../../../../third-64/libev/lib/libev.a \
+gingko_serv_LDADD = $(srcdir)/../lib/libev/lib/libev.a \
     $(srcdir)/hash/libxor_hash.a
 
 gingko_serv_LDFLAGS = -D_GNU_SOURCE -ggdb -funsigned-char
 gingko_clnt_SOURCES = async_threads.cpp async_conn.cpp gingko_clnt.cpp clnt_main.cpp\
     gingko_base.cpp path.cpp log.cpp option.cpp socket.cpp limit.cpp \
-    route.cpp snap.cpp
+    route.cpp snap.cpp progress.cpp
 
-gingko_clnt_LDADD = $(srcdir)/../../../../../../third-64/libev/lib/libev.a \
+gingko_clnt_LDADD = $(srcdir)/../lib/libev/lib/libev.a \
     $(srcdir)/hash/libxor_hash.a
 
 gingko_clnt_LDFLAGS = -D_GNU_SOURCE -ggdb -funsigned-char
@@ -387,6 +382,7 @@ include ./$(DEPDIR)/limit.Po
 include ./$(DEPDIR)/log.Po
 include ./$(DEPDIR)/option.Po
 include ./$(DEPDIR)/path.Po
+include ./$(DEPDIR)/progress.Po
 include ./$(DEPDIR)/route.Po
 include ./$(DEPDIR)/seed.Po
 include ./$(DEPDIR)/serv_main.Po
@@ -855,6 +851,8 @@ uninstall-am:
 	mostlyclean-generic pdf pdf-am ps ps-am tags tags-recursive \
 	uninstall uninstall-am
 
+#    -I$(srcdir)/../../../../../../third-64/libev/include 
+#    -I$(srcdir)/../../../../../../../third-64/libev/include 
 export INCLUDES
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.

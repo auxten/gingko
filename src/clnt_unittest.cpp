@@ -82,7 +82,6 @@ s_gingko_global_t gko;
 /************** FUNC DICT **************/
 
 GINGKO_OVERLOAD_S_HOST_LT
-GINGKO_OVERLOAD_S_HOST_EQ
 
 
 int clnt_unittest_init()

@@ -99,7 +99,7 @@ void thread_worker_process(int fd, short ev, void *arg);
 /// Dispatch to worker
 void thread_worker_dispatch(int sig_id);
 /// init the whole thread pool
-void thread_init();
+int thread_init();
 /// client side async server starter
 void * gingko_clnt_async_server(void * arg);
 /// server side async server starter

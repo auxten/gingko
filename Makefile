@@ -1,4 +1,7 @@
-all: compile move rm_config
+all: makelib compile move rm_config
+
+makelib:
+	cd lib && bash -x patch_build.sh && cd ..
 
 compile:
 	cd src && ./configure CXXFLAGS='-O0 -ggdb' --enable-unittest --enable-debug && make clean && \
@@ -7,6 +10,7 @@ compile:
 rm_config:
 	rm ./src/config.h
 	rm ./src/hash/config.h
+	rm -rf ./lib/libev/include
 	
 clean:
 	pwd

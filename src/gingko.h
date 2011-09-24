@@ -58,8 +58,13 @@ typedef unsigned long long      GKO_UINT64;
 typedef long long               GKO_INT64;
 typedef const char * const      GKO_CONST_STR;
 
+static const uid_t      ROOT =                  0;
 /// block size in bytes
-static const int        BLOCK_SIZE =            (2 * 1024 * 1024);
+static const int        BLOCK_SIZE =            (5 * 1024 * 1024);
+/// req at max MAX_REQ_SERV_BLOCKS from serv
+static const int        MAX_REQ_SERV_BLOCKS =   10;
+/// req at max MAX_REQ_SERV_BLOCKS from serv
+static const int        MAX_REQ_CLNT_BLOCKS =   10;
 /// just like ZERO :p
 static const int        SERV_PORT =             2120;
 /// tcp buffer size
@@ -80,8 +85,10 @@ static const int        MAX_LIS_PORT =          60000;
 static const int        MAX_PACKET_LEN =        65536;
 /// for global locks
 static const int        MAX_JOBS =              1024;
-/// req at max MAX_REQ_SERV_BLOCKS from serv
-static const int        MAX_REQ_SERV_BLOCKS =   10;
+/// max log line count to reopen log file, in case of file mv
+static const GKO_INT64  MAX_LOG_REOPEN_LINE =   10;
+/// max log line count
+static const GKO_INT64  MAX_LOG_LINE =          (100000 * MAX_LOG_REOPEN_LINE);
 /// max length of a uri
 static const int        MAX_URI =               MAX_PATH_LEN;
 /// nftw depth this sames have no effect....whatever 100 is enough
@@ -89,11 +96,15 @@ static const int        MAX_SCAN_DIR_FD =       5;
 ///((1LL<<sizeof(GKO_INT64)*8-1)-1);
 static const GKO_INT64  MAX_INT64 =             9223372036854775807LL;
 /// retry 3 times then fail
-static const int        MAX_RETRY =             30;
+static const int        MAX_DOWN_RETRY =        45;
+/// retry 3 times then fail
+static const int        MAX_JOIN_RETRY =        3;
+/// retry 3 times then fail
+static const int        MAX_HELO_RETRY =        3;
 /// min value of ulimit -n
-static const GKO_INT64  MIN_NOFILE =            2000;
+static const GKO_UINT64 MIN_NOFILE =            2000;
 /// bind port failed return
-static const int        BIND_FAIL =             -13;
+static const int        BIND_FAIL =             -12;
 /// connect failed return
 static const int        HOST_DOWN_FAIL =        -13;
 /// bind port try interval, in microseconds
@@ -107,29 +118,41 @@ static const int        MYSTACKSIZE =           (10 * 1024 * 1024);
 /// when download is over seed time
 static const int        SEED_TIME =             60;
 /// default client conn limit
-static const int        CLNT_POOL_SIZE =        10;
+static const int        CLNT_POOL_SIZE =        20;
 /// default client thread num
-static const int        CLNT_ASYNC_THREAD_NUM = 2;
+static const int        CLNT_ASYNC_THREAD_NUM = 4;
 /// default server conn limit
-static const int        SERV_POOL_SIZE =        3000;
+static const int        SERV_POOL_SIZE =        30000;
 /// default client thread num
-static const int        SERV_ASYNC_THREAD_NUM = 50;
+static const int        SERV_ASYNC_THREAD_NUM = 12;
 /// default xor hash thread num
 static const int        XOR_HASH_TNUM =         2;
 /// host count got from hash ring
-static const int        FIRST_HOST_COUNT =      5;
+static const int        FIRST_HOST_COUNT =      3;
 /// host count got from speed test
-static const int        SECOND_HOST_COUNT =     5;
+static const int        SECOND_HOST_COUNT =     3;
 /// in seconds
 static const int        RCV_TIMEOUT =           10;
 /// in seconds
 static const int        SND_TIMEOUT =           10;
 /// in seconds
-static const int        RCVBLK_TIMEOUT =        40;
+static const int        RCVHI_TIMEOUT =         120;
 /// in seconds
-static const int        SNDBLK_TIMEOUT =        30;
+static const int        RCVJOB_TIMEOUT =        120;
 /// in seconds
-static const int        RCVPROGRESS_TIMEOUT =   600;
+static const int        RCVHAVE_TIMEOUT =       10;
+/// in seconds
+static const int        RCVSERV_HAVE_TIMEOUT =  20;
+/// in seconds
+static const int        SNDSERV_HAVE_TIMEOUT =  20;
+/// in seconds
+static const int        SNDHELO_TIMEOUT =       10;
+/// in seconds
+static const int        RCVBLK_TIMEOUT =        20;
+/// in seconds
+static const int        SNDBLK_TIMEOUT =        20;
+/// in seconds
+static const int        RCVPROGRESS_TIMEOUT =   60;
 /// sleep time before free the job related mem
 static const int        ERASE_JOB_MEM_WAIT =    (SND_TIMEOUT + 5);
 ///bytes per second
@@ -137,7 +160,7 @@ static const int        CLNT_LIMIT_UP_RATE =    (20 * 1024 * 1024);
 ///bytes per second
 static const int        CLNT_LIMIT_DOWN_RATE =  (20 * 1024 * 1024);
 ///bytes per second
-static const int        SERV_LIMIT_UP_RATE =    (110 * 1024 * 1024);
+static const int        SERV_LIMIT_UP_RATE =    (80 * 1024 * 1024);
 ///bytes per second
 static const int        LIMIT_MK_SEED_RATE =    (200 * 1024 * 1024);
 /// every physical node have VNODE_NUM vnodes
@@ -156,7 +179,10 @@ static const int        READ_OPEN_FLAG =        (O_RDONLY | O_NOCTTY);
 static const int        WRITE_OPEN_FLAG =       (O_WRONLY | O_NOCTTY);
 
 static const int        MSG_LEN =               (MAX_URI + IP_LEN + 32 + MAX_LONG_INT * 2);
-static const int        CLNT_READ_BUFFER_SIZE = (MSG_LEN);
+static const int        CLNT_READ_BUFFER_SIZE = (MSG_LEN + 10);
+/// limit read rate when read msg larger than this
+static const int        READ_LIMIT_THRESHOLD =  (MSG_LEN + 5);
+
 ///"NEWW 255.255.255.255 65535"
 static const int        SHORT_MSG_LEN =         (4 + 1 + IP_LEN + 1 + 5 + 1);
 /// 10s
@@ -166,14 +192,17 @@ static const int        MK_DIR_SYMLINK_ERR =    2;
 static const int        DOWNLOAD_ERR =          3;
 
 
-static GKO_CONST_STR     GKO_VERSION =          "1.0.0.3";
+static GKO_CONST_STR     GKO_VERSION =          "1.0.1.0";
 static GKO_CONST_STR     SERVER_LOG =           "/dev/stdout";
 static GKO_CONST_STR     CLIENT_LOG =           "/dev/stdout";
 /// file for continue interrupted job
 static GKO_CONST_STR     GKO_SNAP_FILE =        "._gk_snapshot_";
 /// for debug usage
 static GKO_CONST_STR     SERVER_IP =            "127.0.0.1";
+/// for log
 static GKO_CONST_STR     TIME_FORMAT =          "[%Y-%m-%d %H:%M:%S] ";
+/// for old log path
+static GKO_CONST_STR     OLD_LOG_TIME =         ".%Y%m%d%H%M%S";
 
 /// host_hash usage
 static const u_char  DEL_HOST =                 0x01;
@@ -281,6 +310,8 @@ static bool operator ==(const s_host_t& lhost, const s_host_t& rhost) {\
 
 /// some struct define
 #pragma pack (4)
+
+typedef struct _s_job_t s_job_t;
 typedef void * (*func_t)(void *, int);
 
 /// file structure
@@ -312,10 +343,19 @@ typedef struct _s_block_t
     std::set<s_host_t> * host_set; ///only used by client, lock here
 } s_block_t;
 
+/// arguments for thread
+typedef struct
+{
+    GKO_INT64 range[2];
+    s_job_t * p;
+    u_char * buf;
+    int index;
+} hash_worker_thread_arg;
+
 /// job structure
 typedef struct _s_job_t
 {
-    int job_state;    /// pass job state to client
+    unsigned int job_state;    /// pass job state to client
     int host_num;
     int lock_id;
     char uri[MAX_URI];
@@ -332,6 +372,7 @@ typedef struct _s_job_t
     /** hash worker threads **/
     pthread_t hash_worker[XOR_HASH_TNUM];
     u_char * hash_buf[XOR_HASH_TNUM];
+    hash_worker_thread_arg arg[XOR_HASH_TNUM];
 } s_job_t;
 
 /// store host hash result
@@ -406,6 +447,8 @@ typedef struct _s_option_t
 {
     char need_help;
     char to_continue;
+    char need_progress;
+    int to_debug;
     int port;
     int worker_thread;
     int connlimit;
@@ -465,7 +508,7 @@ typedef struct _s_snap_t
 
 /************** FUNC DICT **************/
 /// send HELO handler
-int helo_serv_c(void *, int);
+int helo_serv_c(void * arg, int fd, s_host_t * server);
 /// send JOIN handler
 void * join_job_c(void *, int);
 /// send QUIT handler

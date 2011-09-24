@@ -7,9 +7,9 @@ start()
 
 stop()
 {
-    killall gingko_serv && sleep 3
+    killall gingko_serv && sleep 1
     if [ `uname` = 'Linux' ];then
-        netstat -npl | grep ':2120'
+        netstat -npl 2>/dev/null| grep ':2120'
     else
         lsof -ni -P | grep ':2120'
     fi
@@ -24,7 +24,7 @@ status()
         echo "############# tcp_fin_timeout = $(cat /proc/sys/net/ipv4/tcp_fin_timeout)"
     fi
     if [ `uname` = 'Linux' ];then
-        netstat -npl | grep ':2120'
+        netstat -npl 2>/dev/null | grep ':2120'
     else
         lsof -ni -P | grep ':2120'
     fi
@@ -33,7 +33,9 @@ status()
 case C"$1" in
     Cstart)
     stop
+    sleep 1
     start
+    sleep 1
     status
     ;;  
 

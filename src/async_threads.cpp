@@ -24,7 +24,7 @@ extern s_gingko_global_t gko;
  * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-GKO_STATIC_FUNC void thread_worker_new(int id)
+GKO_STATIC_FUNC int thread_worker_new(int id)
 {
     int ret;
 
@@ -32,23 +32,23 @@ GKO_STATIC_FUNC void thread_worker_new(int id)
     if(! worker)
     {
     	gko_log(FATAL, "new thread_worker failed");
-    	exit(1);
+    	return -1;
     }
 
     int fds[2];
     if (pipe(fds) != 0)
     {
         gko_log(FATAL, "pipe error");
-        exit(1);
+        return -1;
     }
     worker->notify_recv_fd = fds[0];
     worker->notify_send_fd = fds[1];
 
-    worker->ev_base = (event_base*)event_init();
+    worker->ev_base = (struct event_base*)event_init();
     if (!worker->ev_base)
     {
         gko_log(FATAL, "Worker event base initialize error");
-        exit(1);
+        return -1;
     }
 
     pthread_attr_t thread_attr;
@@ -60,11 +60,12 @@ GKO_STATIC_FUNC void thread_worker_new(int id)
     if (ret)
     {
         gko_log(FATAL, "Thread create error");
-        exit(1);
+        return -1;
     }
     worker->id = id;
     *(g_worker_list + id) = worker;
     ///gko_log(NOTICE, "thread_worker_new :%d",(*(g_worker_list+id))->notify_send_fd );
+    return 0;
 }
 
 /**
@@ -154,20 +155,26 @@ GKO_STATIC_FUNC int thread_list_find_next()
  * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-void thread_init()
+int thread_init()
 {
     int i;
     g_worker_list = new struct thread_worker *[gko.opt.worker_thread];
     if (! g_worker_list)
     {
         gko_log(FATAL, "new new struct thread_worker *[gko.opt.worker_thread] failed");
-        exit(1);
+        return -1;
     }
     memset(g_worker_list, 0, sizeof(struct thread_worker *) * gko.opt.worker_thread);
     for (i = 0; i < gko.opt.worker_thread; i++)
     {
-        thread_worker_new(i);
+        if(thread_worker_new(i) != 0)
+        {
+            gko_log(FATAL, FLF("thread_worker_new error"));
+            return -1;
+        }
     }
+
+    return 0;
 }
 
 /**

@@ -58,7 +58,6 @@ extern pthread_mutex_t g_grand_lock;
 extern s_lock_t g_job_lock[MAX_JOBS];
 /************** PTHREAD STUFF **************/
 
-GINGKO_OVERLOAD_S_HOST_LT
 extern std::map<std::string, s_job_t *> g_m_jobs;
 
 

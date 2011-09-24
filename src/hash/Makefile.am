@@ -1,11 +1,11 @@
 SUBDIRS = .
 INCLUDES = -I$(srcdir)/src \
-    -I$(srcdir)/../../../../../third-64/libevent/include \
-    -I$(srcdir)/../../../../../../third-64/libevent/include \
-    -I$(srcdir)/../../../../../../../third-64/libevent/include \
     -I$(srcdir)/../../../../../third-64/gtest/include \
     -I$(srcdir)/../../../../../../third-64/gtest/include \
-    -I$(srcdir)/../../../../../../../third-64/gtest/include
+    -I$(srcdir)/../../../../../../../third-64/gtest/include \
+    -I$(srcdir)/../../lib/libev/include 
+#    -I$(srcdir)/../../../../../../third-64/libev/include 
+#    -I$(srcdir)/../../../../../../../third-64/libev/include 
 export INCLUDES
 
 noinst_LIBRARIES=libxor_hash.a

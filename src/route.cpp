@@ -13,7 +13,9 @@
 #include "gingko.h"
 #include "hash/xor_hash.h"
 #include "snap.h"
+#include "progress.h"
 #include "gingko_clnt.h"
+#include "log.h"
 
 GINGKO_OVERLOAD_S_HOST_EQ
 
@@ -71,10 +73,10 @@ int get_blk_src(s_job_t * jo, unsigned src_max, GKO_INT64 blk_idx,
         ///printf("blk_idx: %lld\n", blk_idx);
         blk_idx = prev_b(jo, blk_idx);
     }
-    /// insert gko.the_serv
-    (*h_vec).push_back(gko.the_serv);
     /// sort the src by distance, cause we just need the first src_max+1
     sort((*h_vec).begin(), (*h_vec).end(), cmpByDistance);
+    /// insert gko.the_serv
+    (*h_vec).push_back(gko.the_serv);
     return (*h_vec).size();
 }
 
@@ -83,6 +85,7 @@ int get_blk_src(s_job_t * jo, unsigned src_max, GKO_INT64 blk_idx,
  * @brief return block count downloaded during test the source speed
  *
  * @see
+ * @return only return 0 or positive num
  * @note
  * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
  * @date 2011-8-1
@@ -92,7 +95,7 @@ int decide_src(s_job_t * jo, int src_max, GKO_INT64 blk_idx,
 {
     int num;
     int host_i = 0;
-    GKO_INT64 blk_i = 0;
+    int blk_i = 0;
     static struct timeval before_tv;
     struct timeval after_tv;
     GKO_INT64 fastest_time = MAX_INT64;
@@ -150,7 +153,7 @@ int decide_src(s_job_t * jo, int src_max, GKO_INT64 blk_idx,
              **/
             tmp_time = MAX_INT64;
         }
-        ///printf("time: %lld\n", tmp);
+//        gko_log(DEBUG, "%u time: %lld", (*i).port, tmp_time);
         if (fastest_time > tmp_time)
         {
             fastest_time = tmp_time;
@@ -158,8 +161,9 @@ int decide_src(s_job_t * jo, int src_max, GKO_INT64 blk_idx,
         }
         if (++host_i == src_max)
         {
-            ///make i point to the "gko.the_serv"
+            ///make i point to the "gko.the_serv" prev, the ++ will make it serv
             i = (*h_vec).end() - 2;
+//            gko_log(DEBUG, "next: %u", (*i).port);
             continue;
         }
     }

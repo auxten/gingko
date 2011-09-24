@@ -145,16 +145,28 @@ GKO_STATIC_FUNC int init_daemon(void)
  * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-GKO_STATIC_FUNC inline void pthread_init()
+GKO_STATIC_FUNC int pthread_init()
 {
-    pthread_key_create(&g_dir_key, NULL);
-    pthread_mutex_init(&g_grand_lock, NULL);
+    if (pthread_key_create(&g_dir_key, NULL) != 0)
+    {
+        gko_log(FATAL, FLF("pthread_key_create error"));
+        return -1;
+    }
+    if (pthread_mutex_init(&g_grand_lock, NULL) != 0)
+    {
+        gko_log(FATAL, FLF("pthread_mutex_init error"));
+        return -1;
+    }
     for (int i = 0; i < MAX_JOBS; i++)
     {
         g_job_lock[i].state = LK_FREE;
-        pthread_mutex_init(&(g_job_lock[i].lock), NULL);
+        if (pthread_mutex_init(&(g_job_lock[i].lock), NULL) != 0)
+        {
+            gko_log(FATAL, FLF("pthread_mutex_init error"));
+            return -1;
+        }
     }
-    return;
+    return 0;
 }
 
 /**
@@ -165,15 +177,28 @@ GKO_STATIC_FUNC inline void pthread_init()
  * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-GKO_STATIC_FUNC inline void pthread_clean()
+GKO_STATIC_FUNC int pthread_clean()
 {
     for (int i = 0; i < MAX_JOBS; i++)
     {
-        pthread_mutex_destroy(&(g_job_lock[i].lock));
+        if (pthread_mutex_destroy(&(g_job_lock[i].lock)) != 0)
+        {
+            gko_log(FATAL, FLF("pthread_mutex_init error"));
+            return -1;
+        }
     }
-    pthread_mutex_destroy(&g_grand_lock);
-    pthread_key_delete(g_dir_key);
-    return;
+    if (pthread_mutex_destroy(&g_grand_lock) != 0)
+    {
+        gko_log(FATAL, FLF("pthread_mutex_init error"));
+        return -1;
+    }
+    if (pthread_key_delete(g_dir_key) != 0)
+    {
+        gko_log(FATAL, FLF("pthread_mutex_init error"));
+        return -1;
+    }
+
+    return 0;
 }
 
 /**
@@ -207,7 +232,7 @@ GKO_STATIC_FUNC void * serv_int_worker(void * a)
             gko_log(WARNING, "SIGNAL handled, server terminated");
             /// Clear all status
             conn_close();
-            exit(-1);
+            exit(2);
         }
         usleep(CK_SIG_INTERVAL);
     }
@@ -273,14 +298,26 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Server error, quited\n");
         exit(1);
     }
-    pthread_init();
+
+    gko_log(DEBUG, "Debug mode start, i will print tons of log :p!");
+
+    if (pthread_init() != 0)
+    {
+        gko_log(FATAL, FLF("pthread_init error"));
+        fprintf(stderr, "Server error, quited\n");
+        exit(1);
+    }
     if (sig_watcher(serv_int_worker))
     {
         gko_log(FATAL, "signal watcher start error");
         fprintf(stderr, "Server error, quited\n");
         exit(1);
     }
-    gingko_serv_async_server();
+    if (gingko_serv_async_server() != 0)
+    {
+        gko_log(WARNING, "gingko_serv_async_server error");
+        exit(1);
+    }
     pthread_clean();
     return 0;
 }

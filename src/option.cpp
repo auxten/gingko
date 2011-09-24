@@ -32,7 +32,7 @@ extern s_gingko_global_t gko;
  **/
 void clnt_show_version()
 {
-    printf("gingko_clnt %s\n", GKO_VERSION);
+    printf("gingko_clnt %s\nBuilt: %s %s\n", GKO_VERSION, __DATE__, __TIME__);
     return;
 }
 
@@ -46,7 +46,7 @@ void clnt_show_version()
  **/
 void serv_show_version()
 {
-    printf("gingko_serv %s\n", GKO_VERSION);
+    printf("gingko_serv %s\nBuilt: %s %s\n", GKO_VERSION, __DATE__, __TIME__);
     return;
 }
 
@@ -84,6 +84,10 @@ DESCRIPTION\n\
      -h\n\
      --help\n\
          Show this help message.\n\
+\n\
+     -o\n\
+     --progress\n\
+         Show download progress message at stdout.\n\
 \n\
      -c\n\
      --continue\n\
@@ -124,6 +128,9 @@ DESCRIPTION\n\
      -v\n\
      --version\n\
          Show version message\n\
+\n\
+     --debug\n\
+         Print debug message\n\
 \n\
 EXAMPLES\n\
      The following is how to copy the /path/to/data_src_dir from yf-cm-gingko00.yf01 to localhost\n\
@@ -203,6 +210,9 @@ DESCRIPTION\n\
      --version\n\
          Show version message\n\
 \n\
+     --debug\n\
+         Print debug message\n\
+\n\
 \n\
 AUTHORS\n\
      Wang Pengcheng <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>\n\
@@ -229,6 +239,7 @@ int clnt_parse_opt(int argc, char *argv[], s_job_t * jo)
         {
             { "continue", no_argument, 0, 'c' },
             { "help", no_argument, 0, 'h' },
+            { "progress", no_argument, 0, 'o' },
             { "uplimit", required_argument, 0, 'u' },
             { "downlimit", required_argument, 0, 'd' },
             { "workerthread", required_argument, 0, 't' },
@@ -238,6 +249,7 @@ int clnt_parse_opt(int argc, char *argv[], s_job_t * jo)
             { "port", required_argument, 0, 'p' },
             { "log", required_argument, 0, 'l' },
             { "version", no_argument, 0, 'v' },
+            { "debug", no_argument, &gko.opt.to_debug, 1 },
             { 0, 0, 0, 0 } };
 
     /**
@@ -257,7 +269,7 @@ int clnt_parse_opt(int argc, char *argv[], s_job_t * jo)
     {
         int option_index = 0;
 
-        int c = getopt_long(argc, argv, "chu:d:t:n:s:b:p:l:v", long_options,
+        int c = getopt_long(argc, argv, "chou:d:t:n:s:b:p:l:v", long_options,
                 &option_index);
         if (c == -1)
         {
@@ -267,8 +279,6 @@ int clnt_parse_opt(int argc, char *argv[], s_job_t * jo)
         switch (c)
         {
             case 0: /** if 3rd field of struct option is non zero **/
-                fprintf(stderr, "option %s with arg %s\n",
-                        long_options[option_index].name, optarg ? optarg : " ");
                 break;
 
             case 'h':
@@ -279,6 +289,10 @@ int clnt_parse_opt(int argc, char *argv[], s_job_t * jo)
 
             case 'c':
                 gko.opt.to_continue = 1;
+                break;
+
+            case 'o':
+                gko.opt.need_progress = 1;
                 break;
 
             case 'u':
@@ -364,12 +378,12 @@ int clnt_parse_opt(int argc, char *argv[], s_job_t * jo)
                 strncpy(gko.opt.logpath, optarg, sizeof(gko.opt.logpath));
                 break;
 
-            case '?':
-                break;
-
             case 'v':
                 clnt_show_version();
                 exit(0);
+                break;
+
+            case '?':
                 break;
 
             default:
@@ -457,6 +471,7 @@ int serv_parse_opt(int argc, char *argv[])
             { "connlimit", required_argument, 0, 'n' },
 //            { "seedspeed", required_argument, 0, 'e' },
             { "version", no_argument, 0, 'v' },
+            { "debug", no_argument, &gko.opt.to_debug, 1 },
             { 0, 0, 0, 0 } };
 
     /**
@@ -486,8 +501,6 @@ int serv_parse_opt(int argc, char *argv[])
         switch (c)
         {
             case 0: /** if 3rd field of struct option is non zero **/
-                fprintf(stderr, "option %s with arg %s\n",
-                        long_options[option_index].name, optarg ? optarg : " ");
                 break;
 
             case 'h':
@@ -568,12 +581,12 @@ int serv_parse_opt(int argc, char *argv[])
 //                }
 //                break;
 
-            case '?':
-                break;
-
             case 'v':
                 serv_show_version();
                 exit(0);
+                break;
+
+            case '?':
                 break;
 
             default:

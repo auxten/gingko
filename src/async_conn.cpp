@@ -11,6 +11,7 @@
 #include "async_pool.h"
 #include "log.h"
 #include "socket.h"
+#include "hash/xor_hash.h"
 
 extern s_gingko_global_t gko;
 
@@ -34,7 +35,7 @@ GKO_STATIC_FUNC int conn_client_list_init()
     if (g_client_list == NULL)
     {
         gko_log(FATAL, "Malloc error, cannot init client pool");
-        exit(-1);
+        return -1;
     }
     memset(g_client_list, 0, gko.opt.connlimit * sizeof(struct conn_client *));
     g_total_clients = 0;
@@ -68,7 +69,11 @@ GKO_STATIC_FUNC int gingko_serv_async_server_base_init()
     g_server->on_data_callback = conn_send_data;
     g_server->is_server = 1;
     /// A new TCP server
-    conn_tcp_server(g_server);
+    if (conn_tcp_server(g_server) < 0)
+    {
+        gko_log(FATAL, "conn_tcp_server start error");
+        return -1;
+    }
     return 0;
 }
 
@@ -82,12 +87,13 @@ GKO_STATIC_FUNC int gingko_serv_async_server_base_init()
  **/
 GKO_STATIC_FUNC int gingko_clnt_async_server_base_init(s_host_t * the_host)
 {
-    int port = MAX_LIS_PORT;
+    unsigned int randseed = (unsigned int)time(NULL);
+    int port = MAX_LIS_PORT - rand_r(&randseed) % 500;
     g_server = new struct conn_server;
     if(! g_server)
     {
     	gko_log(FATAL, "new for g_server failed");
-    	exit(1);
+    	return -1;
     }
     memset(g_server, 0, sizeof(struct conn_server));
     g_server->srv_addr = gko.opt.bind_ip;
@@ -102,15 +108,24 @@ GKO_STATIC_FUNC int gingko_clnt_async_server_base_init(s_host_t * the_host)
     g_server->on_data_callback = conn_send_data;
     g_server->is_server = 0;
     /// A new TCP server
-    while (conn_tcp_server(g_server) == BIND_FAIL)
+    int ret;
+    while ((ret = conn_tcp_server(g_server)) < 0)
     {
-        if (port < MIN_PORT)
+        if (ret == BIND_FAIL)
         {
-            gko_log(FATAL, "bind port failed, last try is %d", port);
+            if (port < MIN_PORT)
+            {
+                gko_log(FATAL, "bind port failed, last try is %d", port);
+                return -1;
+            }
+            g_server->srv_port = --port;
+            usleep(BIND_INTERVAL);
+        }
+        else
+        {
+            gko_log(FATAL, "conn_tcp_server start error");
             return -1;
         }
-        g_server->srv_port = --port;
-        usleep(BIND_INTERVAL);
     }
     the_host->port = g_server->srv_port;
     return 0;
@@ -128,18 +143,19 @@ int conn_tcp_server(struct conn_server *c)
 {
     if (g_server->srv_port > MAX_PORT)
     {
-        exit(-1);
+        gko_log(FATAL, "serv port %d > %d", g_server->srv_port, MAX_PORT);
+        return -1;
     }
 
     /// If port number below 1024, root privilege needed
     if (g_server->srv_port < MIN_PORT)
     {
         /// CHECK ROOT PRIVILEGE
-        if (0 != getuid() && 0 != geteuid())
+        if (ROOT != geteuid())
         {
             gko_log(FATAL, "Port %d number below 1024, root privilege needed",
                     g_server->srv_port);
-            exit(-1);
+            return -1;
         }
     }
 
@@ -148,7 +164,7 @@ int conn_tcp_server(struct conn_server *c)
     if (g_server->listen_fd < 0)
     {
         gko_log(WARNING, "Socket creation failed");
-        exit(-1);
+        return -1;
     }
 
     g_server->listen_addr.sin_family = AF_INET;
@@ -161,8 +177,8 @@ int conn_tcp_server(struct conn_server *c)
     {
         if (g_server->is_server)
         {
-            gko_log(FATAL, "Socket bind failed on port, server exit");
-            exit(-1);
+            gko_log(FATAL, "Socket bind failed on port");
+            return -1;
         }
         else
         {
@@ -175,7 +191,7 @@ int conn_tcp_server(struct conn_server *c)
     if (listen(g_server->listen_fd, g_server->listen_queue_length) < 0)
     {
         gko_log(FATAL, "Socket listen failed");
-        exit(-1);
+        return -1;
     }
 
     /// Set socket options
@@ -198,7 +214,7 @@ int conn_tcp_server(struct conn_server *c)
     if (g_server->nonblock && setnonblock(g_server->listen_fd) < 0)
     {
         gko_log(WARNING, "Socket set non-blocking failed");
-        exit(-1);
+        return -1;
     }
 
     g_server->start_time = time((time_t *) NULL);
@@ -233,7 +249,7 @@ void conn_tcp_server_accept(int fd, short ev, void *arg)
     client_fd = accept(fd, (struct sockaddr *) &client_addr, &client_len);
     if (-1 == client_fd)
     {
-        gko_log(FATAL, "Accept error");
+        gko_log(WARNING, "Accept error");
         return;
     }
     /// Add connection to event queue
@@ -322,10 +338,10 @@ void conn_tcp_server_on_data(int fd, short ev, void *arg)
         if(! client->read_buffer)
         {
         	gko_log(FATAL, "new for client->read_buffer failed");
-        	exit(1);
+            conn_client_free(client);
+            return;
         }
         client->buffer_size = buffer_avail = CLNT_READ_BUFFER_SIZE;
-        memset(client->read_buffer, 0, CLNT_READ_BUFFER_SIZE);
     }
     else
     {
@@ -338,17 +354,20 @@ void conn_tcp_server_on_data(int fd, short ev, void *arg)
         ///gko_log(NOTICE, "res: %d",res);
         ///gko_log(NOTICE, "%s",client->read_buffer+read_counter);
         read_counter += res;
-        client->buffer_size *= 2;
-        char * tmp = client->read_buffer;
-        client->read_buffer = new char[client->buffer_size];
-        if (client->read_buffer == NULL)
+        if ((unsigned int)res == buffer_avail)
         {
-            gko_log(FATAL, "realloc error");
-            conn_client_free(client);
-            return;
+            client->buffer_size *= 2;
+            char * tmp = client->read_buffer;
+            client->read_buffer = new char[client->buffer_size];
+            if (client->read_buffer == NULL)
+            {
+                gko_log(FATAL, "realloc error");
+                conn_client_free(client);
+                return;
+            }
+            memcpy(client->read_buffer, tmp, read_counter);
+            delete [] tmp;
         }
-        memcpy(client->read_buffer, tmp, read_counter);
-        delete [] tmp;
         buffer_avail = client->buffer_size - read_counter;
         memset(client->read_buffer + read_counter, 0, buffer_avail);
     }
@@ -401,7 +420,7 @@ struct conn_client * add_new_conn_client(int client_fd)
             if(!tmp)
             {
             	gko_log(FATAL, "new conn_client failed");
-            	exit(1);
+            	return tmp;
             }
         }
     }
@@ -410,7 +429,7 @@ struct conn_client * add_new_conn_client(int client_fd)
         /// FIXME
         ///Client list pool full, if you want to enlarge it, modify async_pool.h source please
         gko_log(WARNING, "Client list full");
-        ///return;
+        return tmp;
     }
 
     if (tmp)
@@ -463,7 +482,7 @@ int conn_client_free(struct conn_client *client)
         return -1;
     }
     ///close socket and further receives will be disallowed
-    //shutdown(client->client_fd, SHUT_RD);
+    shutdown(client->client_fd, SHUT_RD);
     close(client->client_fd);
     conn_client_clear(client);
     g_total_clients--;
@@ -548,7 +567,7 @@ int conn_close()
 void * gingko_clnt_async_server(void * arg)
 {
     s_async_server_arg_t * arg_p = (s_async_server_arg_t *) arg;
-    g_ev_base = (event_base*)event_init();
+    g_ev_base = (struct event_base*)event_init();
     if (!g_ev_base)
     {
         gko_log(FATAL, "event init failed");
@@ -566,7 +585,11 @@ void * gingko_clnt_async_server(void * arg)
         gko_log(FATAL, "conn_client_list_init failed");
         exit(1);
     }
-    thread_init();
+    if (thread_init() != 0)
+    {
+        gko_log(FATAL, FLF("thread_init failed"));
+        exit(1);
+    }
     event_base_loop(g_ev_base, 0);
     pthread_exit((void *) 0);
 }
@@ -581,25 +604,29 @@ void * gingko_clnt_async_server(void * arg)
  **/
 int gingko_serv_async_server()
 {
-    g_ev_base = (event_base*)event_init();
+    g_ev_base = (struct event_base*)event_init();
     if (!g_ev_base)
     {
         gko_log(FATAL, "event init failed");
-        exit(1);
+        return -1;
     }
 
-    if (gingko_serv_async_server_base_init())
+    if (gingko_serv_async_server_base_init() != 0)
     {
         gko_log(FATAL, "gingko_clnt_async_server_base_init failed");
-        exit(1);
+        return -1;
     }
 
     if (conn_client_list_init() < 1)
     {
         gko_log(FATAL, "conn_client_list_init failed");
-        exit(1);
+        return -1;
     }
-    thread_init();
+    if (thread_init() != 0)
+    {
+        gko_log(FATAL, FLF("thread_init failed"));
+        return -1;
+    }
     event_base_loop(g_ev_base, 0);
 
     return 0;

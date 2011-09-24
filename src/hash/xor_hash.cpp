@@ -192,7 +192,7 @@ void * xor_hash_worker_f(void * a)
     s_job_t * jo = arg->p;
     GKO_INT64 start = arg->range[0];
     GKO_INT64 num = arg->range[1] - arg->range[0];
-    gko_log(NOTICE, "range: %lld %lld\n", arg->range[0], arg->range[1]);
+    gko_log(NOTICE, "range: %lld %lld", arg->range[0], arg->range[1]);
     u_char * buf = (jo->hash_buf)[t_idx];
     if (num == 0)
     {
@@ -274,7 +274,7 @@ void * xor_hash_worker_f(void * a)
     }
 
     delete [] buf;
-    (jo->hash_buf)[arg->index] = NULL;
+    (jo->hash_buf)[t_idx] = NULL;
     gko_log(TRACE, "xor_hash_worker_f returned successfully");
     pthread_exit((void *) 0);
 }

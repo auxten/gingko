@@ -197,12 +197,10 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 SUBDIRS = .
 INCLUDES = -I$(srcdir)/src \
-    -I$(srcdir)/../../../../../third-64/libevent/include \
-    -I$(srcdir)/../../../../../../third-64/libevent/include \
-    -I$(srcdir)/../../../../../../../third-64/libevent/include \
     -I$(srcdir)/../../../../../third-64/gtest/include \
     -I$(srcdir)/../../../../../../third-64/gtest/include \
-    -I$(srcdir)/../../../../../../../third-64/gtest/include
+    -I$(srcdir)/../../../../../../../third-64/gtest/include \
+    -I$(srcdir)/../../lib/libev/include 
 
 noinst_LIBRARIES = libxor_hash.a
 libxor_hash_a_SOURCES = xor_hash.cpp
@@ -580,6 +578,8 @@ uninstall-am:
 	mostlyclean-compile mostlyclean-generic pdf pdf-am ps ps-am \
 	tags tags-recursive uninstall uninstall-am
 
+#    -I$(srcdir)/../../../../../../third-64/libev/include 
+#    -I$(srcdir)/../../../../../../../third-64/libev/include 
 export INCLUDES
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.

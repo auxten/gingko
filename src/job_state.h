@@ -20,6 +20,8 @@ static const unsigned int   JOB_RECURSE_ERR =           104;
 static const unsigned int   JOB_TO_BE_ERASED =          105;
 /// job is joined, ie: g_job is ready
 static const unsigned int   JOB_IS_JOINED =             106;
+/// job init failed due to recurse error
+static const unsigned int   JOB_RECURSE_DONE =          107;
 
 
 #endif /** JOB_STATE_H_ **/

@@ -103,7 +103,10 @@ int connect_host(s_host_t * h, int recv_sec, int send_sec)
     int addr_len;
     struct timeval recv_timeout;
     struct timeval send_timeout;
+#if HAVE_POLL
+#else
     fd_set wset;
+#endif /* HAVE_POLL */
 
     addr_len = getaddr_my(h->addr, &host);
     if (FAIL_CHECK(!addr_len))
@@ -167,13 +170,13 @@ int connect_host(s_host_t * h, int recv_sec, int send_sec)
 #endif /* HAVE_POLL */
     if (select_ret < 0)
     {
-        gko_log(FATAL, "select/poll error on connect");
+        gko_log(WARNING, "select/poll error on connect");
         ret = HOST_DOWN_FAIL;
         goto CONNECT_END;
     }
     if (!select_ret)
     {
-        gko_log(FATAL, "connect timeout on connect");
+        gko_log(WARNING, "connect timeout on connect");
         ret = HOST_DOWN_FAIL;
         goto CONNECT_END;
     }

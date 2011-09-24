@@ -566,7 +566,7 @@ int correct_mode(s_job_t * jo)
     for (GKO_INT64 i = 0; i < jo->file_count; i++)
     {
         f_p = jo->files + i;
-        if (! (f_p->mode & S_IWUSR))
+        if ((! (f_p->mode & S_IWUSR)) && (f_p->size == -1))
         {
             if(chmod(f_p->name, f_p->mode))
             {

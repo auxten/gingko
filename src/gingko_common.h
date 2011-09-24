@@ -95,6 +95,7 @@ GKO_STATIC_FUNC void * get_blocks_s(void * uri, int fd)
     char msg[MSG_LEN] = {'\0'};
     char * arg_array[4];
     char * c_uri = (char *) uri;
+    gko_log(DEBUG, "##########get_blocks: %s", c_uri);
     if (sep_arg(c_uri, arg_array, 4) != 4)
     {
         gko_log(WARNING, "Wrong GETT cmd: %s", c_uri);
@@ -103,7 +104,6 @@ GKO_STATIC_FUNC void * get_blocks_s(void * uri, int fd)
     ///    for (i = 0; i < 4; i++) {
     ///        gko_log(NOTICE, "%s", arg_array[i]);
     ///    }
-    ///    gko_log(NOTICE, "##########get_blocks: %s", req);
     GKO_INT64 start = atol(arg_array[2]);
     GKO_INT64 count = atol(arg_array[3]);
 #ifdef GINGKO_SERV
@@ -153,14 +153,15 @@ GKO_STATIC_FUNC void * get_blocks_s(void * uri, int fd)
 #endif /** GINGKO_SERV **/
     block_have = i;
     snprintf(msg, MSG_LEN, "HAVE\t%lld", block_have);
-    if ((i = sendall(fd, msg, MSG_LEN, SNDBLK_TIMEOUT)) < 0)
+    gko_log(DEBUG, "%s", msg);
+    if ((i = sendall(fd, msg, MSG_LEN, SNDSERV_HAVE_TIMEOUT)) < 0)
     {
         gko_log(WARNING, "sending HAVE error!");
         return (void *) -1;
     }
     if ((i = sendblocks(fd, jo, start, block_have)) < 0)
     {
-//        gko_log(NOTICE, "sendblocks error!");
+        gko_log(DEBUG, "sendblocks error!");
         return (void *) -1;
     }
     return (void *) 0;
@@ -205,7 +206,6 @@ GKO_STATIC_FUNC void * join_job_s(void * uri, int fd)
     s_host_t * host_array;
     std::map<std::string, s_job_t *>::iterator it;
     std::set<s_host_t>::iterator host_it;
-    hash_worker_thread_arg arg[XOR_HASH_TNUM];
     gko_log(NOTICE, "join_job %s", c_uri);
     /// req fields seperated by \t
     if (sep_arg(c_uri, arg_array, 4) != 4)
@@ -224,11 +224,6 @@ GKO_STATIC_FUNC void * join_job_s(void * uri, int fd)
     { ///not first host of the g_job
         jo = it->second;
         pthread_mutex_unlock(&g_grand_lock);
-        pthread_mutex_lock(&g_job_lock[jo->lock_id].lock);
-        (*jo->host_set).insert(h);
-        jo->host_num = (*jo->host_set).size();
-        gko_log(NOTICE, "new job add, host_num: %d", jo->host_num);
-        pthread_mutex_unlock(&g_job_lock[jo->lock_id].lock);
     }
     else
     { ///first host of the g_job, create the g_job
@@ -245,6 +240,7 @@ GKO_STATIC_FUNC void * join_job_s(void * uri, int fd)
         if(!jo)
         {
             gko_log(FATAL, "new s_job_t failed");
+            pthread_mutex_unlock(&g_grand_lock);
             return (void *) -1;
         }
         memset(jo, 0, sizeof(s_job_t));
@@ -269,39 +265,57 @@ GKO_STATIC_FUNC void * join_job_s(void * uri, int fd)
             jo->job_state = JOB_RECURSE_ERR;
             pthread_mutex_unlock(&g_job_lock[jo->lock_id].lock);
         }
+        jo->job_state = JOB_RECURSE_DONE;
         if (jo->block_count)
         {
-            xor_hash_all(jo, arg);
+            xor_hash_all(jo, jo->arg);
         }
         pthread_mutex_unlock(&g_job_lock[jo->lock_id].lock);
     }
 
     GKO_INT64 percent;
-    int sleep_time = 1;
-    do
+    GKO_INT64 progress;
+    if (jo->job_state == JOB_RECURSE_DONE)
     {
-        sleep(MIN(sleep_time, 5));
-        sleep_time++;
-        GKO_INT64 progress = array_sum(jo->hash_progress, XOR_HASH_TNUM);
+        progress = array_sum(jo->hash_progress, XOR_HASH_TNUM);
         percent = jo->total_size ? progress * 100 / jo->total_size : 100;
-        gko_log(NOTICE, "make seed progress: %lld\%", percent);
-        if ((i = sendall(fd, (const void *) &percent, sizeof(percent), 0)) < 0)
-        {
-            gko_log(WARNING, "sending progress error!");
-            return (void *) -1;
-        }
+    }
+    else if (jo->job_state == JOB_RECURSE_ERR)
+    {
+        percent = 100;
+    }
+    else
+    {
+        percent = 0;
+    }
+    gko_log(NOTICE, "make seed progress: %lld%%", percent);
+    if ((i = sendall(fd, (const void *) &percent, sizeof(percent), SND_TIMEOUT)) < 0)
+    {
+        gko_log(WARNING, "sending progress error!");
+        return (void *) -1;
+    }
 
-    } while (percent != 100);
+    if (percent != 100)
+    {
+        return (void *) 0;
+    }
 
+    pthread_mutex_lock(&g_job_lock[jo->lock_id].lock);
+    (*jo->host_set).insert(h);
+    jo->host_num = (*jo->host_set).size();
+    gko_log(NOTICE, "host_num changed, now host_num: %d", jo->host_num);
+    pthread_mutex_unlock(&g_job_lock[jo->lock_id].lock);
+
+    gko_log(NOTICE, "sending seed to %s:%u", h.addr, h.port);
     ///reply client with s_job_t
-    if ((i = sendall(fd, (const void *) jo, sizeof(s_job_t), 0)) < 0)
+    if ((i = sendall(fd, (const void *) jo, sizeof(s_job_t), SNDBLK_TIMEOUT)) < 0)
     {
         gko_log(WARNING, "sending s_job_t error!");
     }
     if (jo->file_count)
     {
         ///send the s_file_t
-        if ((i = sendall(fd, (const void *) (jo->files), jo->files_size, 0)) < 0)
+        if ((i = sendall(fd, (const void *) (jo->files), jo->files_size, SNDBLK_TIMEOUT)) < 0)
         {
             gko_log(WARNING, "sending s_file_t error!");
         }
@@ -309,7 +323,7 @@ GKO_STATIC_FUNC void * join_job_s(void * uri, int fd)
     if (jo->block_count)
     {
         ///send the s_block_t
-        if ((i = sendall(fd, (const void *) (jo->blocks), jo->blocks_size, 0))
+        if ((i = sendall(fd, (const void *) (jo->blocks), jo->blocks_size, SNDBLK_TIMEOUT))
                 < 0)
         {
             gko_log(WARNING, "sending s_block_t error!");
@@ -341,7 +355,7 @@ GKO_STATIC_FUNC void * join_job_s(void * uri, int fd)
     }
     //copy((*(jo->host_set)).begin(), (*(jo->host_set)).begin() + jo->host_num, host_array);
     if ((i = sendall(fd, (const void *) (host_array),
-            tmp_host_num * sizeof(s_host_t), 0)) < 0)
+            tmp_host_num * sizeof(s_host_t), SNDBLK_TIMEOUT)) < 0)
     {
         gko_log(WARNING, "sending host_set error!");
     }
@@ -449,7 +463,8 @@ GKO_STATIC_FUNC void * dead_host_s(void * uri, int fd)
     { ///found the g_job
         jo = it->second;
         pthread_mutex_unlock(&g_grand_lock);
-        if (connect_host(&h, RCV_TIMEOUT, SND_TIMEOUT) == HOST_DOWN_FAIL)
+        int connect_ret = connect_host(&h, RCV_TIMEOUT, SND_TIMEOUT);
+        if (connect_ret == HOST_DOWN_FAIL)
         {
             pthread_mutex_lock(&g_job_lock[jo->lock_id].lock);
             (*jo->host_set).erase(h);
@@ -480,7 +495,7 @@ GKO_STATIC_FUNC void * dead_host_s(void * uri, int fd)
                 char buf[SHORT_MSG_LEN] =
                         {
                             '\0' };
-                snprintf(buf, SHORT_MSG_LEN, "DELE\t%s\t%d", h.addr, h.port);
+                snprintf(buf, SHORT_MSG_LEN, "DELE\t%s\t%u", h.addr, h.port);
                 while (p_h->port)
                 {
                     sendcmd(p_h, buf, 2, 2);
@@ -490,6 +505,11 @@ GKO_STATIC_FUNC void * dead_host_s(void * uri, int fd)
 
             delete [] host_array;
             host_array = NULL;
+        }
+        else if(connect_ret >= 0)
+        {
+            gko_log(NOTICE, "clnt %s:%u not dead", h.addr, h.port);
+            close_socket(connect_ret);
         }
     }
     else
@@ -683,7 +703,7 @@ GKO_STATIC_FUNC void * erase_job_s(void * uri, int fd)
     {
         snprintf(msg, SHORT_MSG_LEN, "NO\tMATCH\tSEED");
     }
-    sendall(fd, msg, SHORT_MSG_LEN, 0);
+    sendall(fd, msg, SHORT_MSG_LEN, SND_TIMEOUT);
 #else
     gko_log(WARNING, "got ERSE cmd on client: %s", (char *) uri);
 #endif
