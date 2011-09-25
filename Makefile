@@ -4,7 +4,7 @@ makelib:
 	cd lib && bash -x patch_build.sh && cd ..
 
 compile:
-	cd src && ./configure CXXFLAGS='-O0 -ggdb' --enable-unittest --enable-debug && make clean && \
+	cd src && ./configure CXXFLAGS='-O0 -ggdb' --enable-debug && make clean && \
 	cd hash && make && cd .. && make -j 4 && cd ..
 
 rm_config:
