@@ -1,0 +1,34 @@
+diff -upNr libev-4.04/ev.c libev-4.04-fixed/ev.c
+--- libev-4.04/ev.c	2011-02-09 07:17:37.000000000 +0800
++++ libev-4.04-fixed/ev.c	2011-09-07 15:29:55.000000000 +0800
+@@ -948,6 +948,8 @@ fd_event_nocheck (EV_P_ int fd, int reve
+ 
+       if (ev)
+         ev_feed_event (EV_A_ (W)w, ev);
++      if (w == (ev_io *)((WL)w)->next)
++        break;
+     }
+ }
+ 
+@@ -1017,7 +1019,11 @@ fd_reify (EV_P)
+           anfd->events = 0;
+ 
+           for (w = (ev_io *)anfd->head; w; w = (ev_io *)((WL)w)->next)
+-            anfd->events |= (unsigned char)w->events;
++            {
++              anfd->events |= (unsigned char)w->events;
++              if (w == (ev_io *)((WL)w)->next)
++                break;
++            }
+ 
+           if (o_events != anfd->events)
+             o_reify = EV__IOFDSET; /* actually |= */
+@@ -1495,6 +1501,8 @@ child_reap (EV_P_ int chain, int pid, in
+           w->rstatus = status;
+           ev_feed_event (EV_A_ (W)w, EV_CHILD);
+         }
++      if (w == (ev_child *)((WL)w)->next)
++        break;
+     }
+ }
+ 
