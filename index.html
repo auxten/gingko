@@ -52,31 +52,30 @@
       p2p file transfer tool, usage is just compitable with scp
     </div>
 
-    <p>
-  ____ _          ____ _         <br>
- / ___(_)_ __    / ___| | _____  <br>
-| |  _| | '_ \  | |  _| |/ / _ \ <br>
-| |_| | | | | | | |_| |   < (_) |<br>
- \____|_|_| |_|  \____|_|\_\___/ <br>
 
-# Start project gingko
-# Gingko is a point to point rsync rolling checksum proto-
-# col implemented file synchronize application. Instead
-# of original rsync builds, we want to make it able to 
-# sync files from a large mesh computer network so-called 
-# the cloud and pushing files from computers to computers,
-# the P2P protocol will make it more efficient.
-# Hope it success!
+<p>  ____ _          ____ _         </p>
+<p> / ___(_)_ __    / ___| | _____  </p>
+<p>| |  _| | '_ \  | |  _| |/ / _ \ </p>
+<p>| |_| | | | | | | |_| |   | (_) |</p>
+<p> \____|_|_| |_|  \____|_|\_\___/ </p>
 
-#define Rolling_checksum_algorithm http://samba.anu.edu.au/rsync/tech_report/node3.html
--EOF-                                 
-</p><h2>Authors</h2>
-<p>auxten (auxtenwpc@gmail.com)
-<br/>xq262144 (xq262144@gmail.com)
+<p>Imagine that you were a linux sys admin who wants to distribute a large dir to many servers, let’s say 50GB to 1000 servers. That will be a really boring task!!!
+</p>
+<p>With “gingko” you may do it much more efficiently. </p>
+
+<p>Gingko is a C/S style p2p files/dir transfer tool, 
+its usage and behavior is pretty much like scp. It has the advantage listed below:</p>
+<ul> Zero configure (start the server, then you can use it by just typing the cmd “gingko_clnt host:/path/to/src /path/to/dest”)
+<ul> High performance (a single server can service 1000 or more clients downloading data in parallel)
+<ul> Low system resource consumption (16MB memory usage, 2% ~ 7% cpu usage on a 2.4GHz Xeon) 
+<ul> Continue last downloading enabled
+<ul> Upload & download bandwidth limitation enabled
+<ul> Low network noise (thanks to the usage of constant hashing)
+
+<h2>Authors</h2>
+<p>auxten (auxtenwpc[AT]gmail)
 <br/>
 <br/>      </p>
-<h2>Contact</h2>
-<p>auxten (auxtenwpc@gmail.com)
 <br/>      </p>
 
 
