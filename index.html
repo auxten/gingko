@@ -25,6 +25,7 @@
     h3 { text-align: center; color: #006600; }
     a { color: #006600; }
     .description { font-size: 1.2em; margin-bottom: 30px; margin-top: 30px; font-style: italic;}
+    .cmd { font-size: 1.2em; margin-bottom: 30px; margin-top: 30px; font-style: bold; background: #333;}
     .download { float: right; }
 		pre { background: #000; color: #fff; padding: 15px;}
     hr { border: 0; width: 80%; border-bottom: 1px solid #aaa}
@@ -74,8 +75,8 @@ its usage and behavior is pretty much like scp. It has the advantage listed belo
 <ul> <b>Low network noise</b> (thanks to the usage of constant hashing)</ul>
 </p>
 <h2>Usage</h2>
-<p> ./gingko_serv to start the server on HostA</p>
-<p> ./gingko_clnt  HostA:/path/to/data /path/to/save/data to start the download</p>
+<p> <div class="cmd">./gingko_serv</div> to start the server on HostA</p>
+<p> <div class="cmd">./gingko_clnt  HostA:/path/to/data /path/to/save/data</div> to start the download</p>
 <p> -h or --help for more detail</p>
 <h2>Authors</h2>
 <p>auxten (auxtenwpc[AT]gmail)
