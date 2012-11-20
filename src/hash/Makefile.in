@@ -230,11 +230,11 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 SUBDIRS = .
 INCLUDES = -I$(srcdir)/src \
-    -I$(srcdir)/../../../../../third-64/gtest/include \
-    -I$(srcdir)/../../../../../../third-64/gtest/include \
-    -I$(srcdir)/../../../../../../../third-64/gtest/include \
     -I$(srcdir)/../../lib/libev/include 
 
+#    -I$(srcdir)/../../../../../../third-64/libev/include 
+#    -I$(srcdir)/../../../../../../../third-64/libev/include 
+#export INCLUDES
 noinst_LIBRARIES = libxor_hash.a libmd5.a libgko_zip.a
 libxor_hash_a_SOURCES = xor_hash.cpp
 libxor_hash_a_LDFLAGS = -O0 -D_GNU_SOURCE -ggdb -funsigned-char
@@ -620,9 +620,6 @@ uninstall-am:
 	mostlyclean mostlyclean-compile mostlyclean-generic pdf pdf-am \
 	ps ps-am tags tags-recursive uninstall uninstall-am
 
-#    -I$(srcdir)/../../../../../../third-64/libev/include 
-#    -I$(srcdir)/../../../../../../../third-64/libev/include 
-export INCLUDES
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

@@ -286,7 +286,7 @@ gingko_serv_LDADD = $(srcdir)/../lib/libev/lib/libev.a \
     $(srcdir)/hash/libxor_hash.a \
     $(srcdir)/hash/libgko_zip.a
 
-gingko_serv_LDFLAGS = -D_GNU_SOURCE -ggdb -funsigned-char
+gingko_serv_LDFLAGS = -D_GNU_SOURCE -ggdb -funsigned-char -lpthread
 gingko_clnt_SOURCES = async_threads.cpp async_conn.cpp gingko_clnt.cpp clnt_main.cpp\
     gingko_base.cpp path.cpp log.cpp option.cpp socket.cpp limit.cpp \
     route.cpp snap.cpp progress.cpp
@@ -295,7 +295,7 @@ gingko_clnt_LDADD = $(srcdir)/../lib/libev/lib/libev.a \
     $(srcdir)/hash/libxor_hash.a \
     $(srcdir)/hash/libgko_zip.a
 
-gingko_clnt_LDFLAGS = -D_GNU_SOURCE -ggdb -funsigned-char
+gingko_clnt_LDFLAGS = -D_GNU_SOURCE -ggdb -funsigned-char -lpthread
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-recursive
 
@@ -843,9 +843,6 @@ uninstall-am:
 	mostlyclean-generic pdf pdf-am ps ps-am tags tags-recursive \
 	uninstall uninstall-am
 
-#    -I$(srcdir)/../../../../../../third-64/libev/include 
-#    -I$(srcdir)/../../../../../../../third-64/libev/include 
-export INCLUDES
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.
