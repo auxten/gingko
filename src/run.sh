@@ -7,21 +7,21 @@ start()
         echo "############# tcp_syncookies  = $(cat /proc/sys/net/ipv4/tcp_syncookies)"
         echo "############# tcp_fin_timeout = $(cat /proc/sys/net/ipv4/tcp_fin_timeout)"
     fi
-    env CPUPROFILE=/tmp/gingko_serv.prof ../src/gingko_serv
+    env CPUPROFILE=/tmp/gkod.prof ../src/gkod
     if [ `uname` = 'Linux' ];then
-        netstat -npl | grep ':2120'
+        netstat -npl | grep 'gkod'
     else
-        lsof -ni -P | grep ':2120'
+        lsof -ni -P | grep 'gkod'
     fi
 }
 
 stop()
 {
-    killall gingko_serv
+    killall gkod
     if [ `uname` = 'Linux' ];then
-        netstat -npl | grep ':2120'
+        netstat -npl | grep 'gkod'
     else
-        lsof -ni -P | grep ':2120'
+        lsof -ni -P | grep 'gkod'
     fi
     echo "All stoped!"
 }

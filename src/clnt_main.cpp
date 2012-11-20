@@ -22,6 +22,7 @@
 #include <sys/socket.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <sys/time.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
@@ -35,6 +36,10 @@
 #include <inttypes.h>
 #ifdef __APPLE__
 #include <sys/uio.h>
+#elif defined (__FreeBSD__)
+#include <sys/uio.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 #else
 #include <sys/sendfile.h>
 #endif /** __APPLE__ **/
@@ -86,7 +91,7 @@ s_gingko_global_t gko;
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 GKO_STATIC_FUNC void * vnode_download(void * arg)
@@ -107,7 +112,7 @@ GKO_STATIC_FUNC void * vnode_download(void * arg)
     /**
      * prepare the buf to readall data
      **/
-    buf = new char[BLOCK_SIZE];
+    buf = new char[BLOCK_SIZE + UNZIP_EXTRA];
     if (buf == NULL)
     {
         gko_log(FATAL, "new for read buf of blocks_size failed");
@@ -144,7 +149,7 @@ GKO_STATIC_FUNC void * vnode_download(void * arg)
         if (UNLIKELY(! i))
         { /** got no available src **/
             gko_log(WARNING, "decide_src ret: %lld", i);
-            sleep(3 + blk_idx_tmp % (++retry));
+            sleep(1 + (++retry) / 5 );
             if (retry > MAX_DOWN_RETRY)
             {
                 delete [] buf;
@@ -159,7 +164,7 @@ GKO_STATIC_FUNC void * vnode_download(void * arg)
         else
         {
             blk_got += i;
-            retry /= 2;
+            retry /= SUCC_RETRY_DIV;
         }
         /**
          *  if intend to get_blocks_c from gko.the_serv
@@ -198,6 +203,12 @@ GKO_STATIC_FUNC void * vnode_download(void * arg)
         }
         ///printf("get_blocks_c: %lld", tmp);
     }
+    /// show the 100%
+    if (gko.opt.need_progress)
+    {
+        show_progress(blk_got - last_blk_got);
+        last_blk_got = blk_got;
+    }
 
     delete [] buf;
     buf = NULL;
@@ -209,7 +220,7 @@ GKO_STATIC_FUNC void * vnode_download(void * arg)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 GKO_STATIC_FUNC int node_download(void *)
@@ -222,7 +233,7 @@ GKO_STATIC_FUNC int node_download(void *)
     }
     s_host_hash_result_t h_hash;
     ///find out the initial block zone, save it in h_hash struct
-    host_hash(&g_job, &gko.the_clnt, &h_hash, ADD_HOST);
+    host_hash(&g_job, &gko_pool::gko_serv, &h_hash, ADD_HOST);
     ///find incharge block count
     for (int i = 0; i < VNODE_NUM; i++)
     {
@@ -237,11 +248,11 @@ GKO_STATIC_FUNC int node_download(void *)
             h_hash.length[i] = 1;
             /**
              * Calculate the vnode area length
-             * go back until we find the node has gko.the_clnt
+             * go back until we find the node has gko_pool::gko_serv
              **/
             std::set<s_host_t> * host_set_p =
                     (g_job.blocks + (j + 1) % g_job.block_count)->host_set;
-            while (!host_set_p || (*host_set_p).find(gko.the_clnt)
+            while (!host_set_p || (*host_set_p).find(gko_pool::gko_serv)
                     == (*host_set_p).end())
             {
 
@@ -288,7 +299,7 @@ GKO_STATIC_FUNC int node_download(void *)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 GKO_STATIC_FUNC void * downloadworker(void *)
@@ -314,7 +325,7 @@ GKO_STATIC_FUNC void * downloadworker(void *)
             }
             else
             {
-                sleep(2);
+                sleep(HELO_RETRY_INTERVAL);
                 helo_retry++;
                 if (helo_retry >= MAX_HELO_RETRY)
                 {
@@ -329,14 +340,14 @@ GKO_STATIC_FUNC void * downloadworker(void *)
         /**
          * wait until the server thread listen a port
          **/
-        while (! gko.the_clnt.port)
+        while (! gko_pool::gko_serv.port)
         {
-            usleep(100);
+            usleep(100000);
         }
     }
 
     /// sleep for some time for make clients req server at distribute time
-    usleep(xor_hash(&gko.the_clnt, sizeof(gko.the_clnt), 0) % 5000000);
+    usleep(xor_hash(&gko_pool::gko_serv, sizeof(gko_pool::gko_serv), 0) % 5000000);
 
     {
         /**
@@ -380,19 +391,20 @@ GKO_STATIC_FUNC void * downloadworker(void *)
             gko_log(FATAL, "make dir symlink file failed");
             pthread_exit((void *) -1);
         }
-        ///ready to serv !!, no need for mutex here
-        gko.ready_to_serv = 1;
     }
 
     {
+        /*
+         * tell all the clients I know: "NEWW ip port"
+         */
         char broadcast_buf[SHORT_MSG_LEN];
         memset(broadcast_buf, 0, SHORT_MSG_LEN);
         snprintf(broadcast_buf, SHORT_MSG_LEN, "NEWW\t%s\t%d",
-                gko.the_clnt.addr, gko.the_clnt.port);
-        for (std::set<s_host_t>::iterator i = (*(g_job.host_set)).begin(); i
+                gko_pool::gko_serv.addr, gko_pool::gko_serv.port);
+        for (std::set<s_host_t>::const_iterator i = (*(g_job.host_set)).begin(); i
                 != (*(g_job.host_set)).end(); i++)
         {
-            sendcmd((s_host_t *) &(*i), broadcast_buf, 2, 2);
+            sendcmd2host((s_host_t *) &(*i), broadcast_buf, 2, 2);
         }
     }
 
@@ -439,15 +451,24 @@ GKO_STATIC_FUNC void * downloadworker(void *)
 
     {
         /**
+         * ready to serv !!, no need for mutex here
+         */
+        gko.ready_to_serv = 1;
+    }
+
+    {
+        /**
          * insert and host_hash the hosts NEWWed before gko.ready_to_serv
          **/
         pthread_mutex_lock(&g_hosts_new_noready_mutex);
         pthread_mutex_lock(&g_clnt_lock);
-        (*(g_job.host_set)).insert(gko.hosts_new_noready.begin(),
+        (*(g_job.host_set)).insert(
+                gko.hosts_new_noready.begin(),
                 gko.hosts_new_noready.end());
+        update_host_max(&g_job);
         pthread_mutex_unlock(&g_clnt_lock);
 
-        for (std::vector<s_host_t>::iterator it = gko.hosts_new_noready.begin();
+        for (std::vector<s_host_t>::const_iterator it = gko.hosts_new_noready.begin();
                 it != gko.hosts_new_noready.end(); it++)
         {
             host_hash(&g_job, &(*it), NULL, ADD_HOST);
@@ -461,14 +482,14 @@ GKO_STATIC_FUNC void * downloadworker(void *)
          **/
         pthread_mutex_lock(&g_hosts_del_noready_mutex);
         pthread_mutex_lock(&g_clnt_lock);
-        for (std::vector<s_host_t>::iterator it = gko.hosts_del_noready.begin(); it
+        for (std::vector<s_host_t>::const_iterator it = gko.hosts_del_noready.begin(); it
                 != gko.hosts_del_noready.end(); it++)
         {
             (*(g_job.host_set)).erase(*it);
         }
         pthread_mutex_unlock(&g_clnt_lock);
 
-        for (std::vector<s_host_t>::iterator it = gko.hosts_del_noready.begin(); it
+        for (std::vector<s_host_t>::const_iterator it = gko.hosts_del_noready.begin(); it
                 != gko.hosts_del_noready.end(); it++)
         {
             host_hash(&g_job, &(*it), NULL, DEL_HOST);
@@ -480,11 +501,21 @@ GKO_STATIC_FUNC void * downloadworker(void *)
         /**
          * Start download NOW!!
          **/
+        struct timeval dl_start_time;
+        struct timeval dl_end_time;
+        gettimeofday(&dl_start_time, NULL);
         if(node_download(NULL))
         {
             gko_log(FATAL, "download data failed");
             pthread_exit((void *) -1);
         }
+        gettimeofday(&dl_end_time, NULL);
+        timersub(&dl_end_time, &dl_start_time, &g_job.dl_time); /// time used for download
+    }
+
+    if (gko.opt.need_progress)
+    {
+        putchar('\n');
     }
 
     char alldone = 1;
@@ -499,6 +530,17 @@ GKO_STATIC_FUNC void * downloadworker(void *)
 
     if(alldone)
     {
+        /*
+         * if all ends successfully, remove the useless snap file
+         */
+        if (unlink(gko.snap_fpath) == 0)
+        {
+            gko_log(DEBUG, "snap file removed succ");
+        }
+        else
+        {
+            gko_log(NOTICE, "snap file remove failed");
+        }
         gko_log(NOTICE,
                 "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@node_download done");
         fprintf(stderr, "all data download success, uploading...\n");
@@ -518,7 +560,7 @@ GKO_STATIC_FUNC void * downloadworker(void *)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 GKO_STATIC_FUNC int pthread_init()
@@ -562,7 +604,7 @@ GKO_STATIC_FUNC int pthread_init()
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 GKO_STATIC_FUNC int pthread_clean()
@@ -600,7 +642,7 @@ GKO_STATIC_FUNC int pthread_clean()
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 GKO_STATIC_FUNC void clnt_int_handler(const int sig)
@@ -613,7 +655,7 @@ GKO_STATIC_FUNC void clnt_int_handler(const int sig)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-9
  **/
 GKO_STATIC_FUNC void * clnt_int_worker(void * a)
@@ -625,10 +667,10 @@ GKO_STATIC_FUNC void * clnt_int_worker(void * a)
             /**
              * send QUIT cmd to server
              **/
-            quit_job_c(&gko.the_clnt, &gko.the_serv, g_job.uri);
+            quit_job_c(&gko_pool::gko_serv, &gko.the_serv, g_job.uri);
             /// Clear all status
             gko_log(WARNING, "Client terminated.");
-            _exit(1);
+            gko_quit(1);
         }
         usleep(CK_SIG_INTERVAL);
     }
@@ -639,14 +681,13 @@ GKO_STATIC_FUNC void * clnt_int_worker(void * a)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 GKO_STATIC_FUNC int gingko_clnt_global_init(int argc, char *argv[])
 {
     memset(&g_job, 0, sizeof(g_job));
     memset(&gko, 0, sizeof(gko));
-    memset(&gko.the_clnt, 0, sizeof(gko.the_clnt));
     memset(&gko.the_serv, 0, sizeof(gko.the_serv));
 
     if(clnt_parse_opt(argc, argv, &g_job) == 0)
@@ -665,8 +706,6 @@ GKO_STATIC_FUNC int gingko_clnt_global_init(int argc, char *argv[])
      * continue init global vars stuff
      **/
     gko.ready_to_serv = 0;
-    gko.cmd_list_p = g_cmd_list;
-    gko.func_list_p = g_func_list_s;
     gko.snap_fd = -2;
     gko.sig_flag = 0;
 
@@ -674,11 +713,29 @@ GKO_STATIC_FUNC int gingko_clnt_global_init(int argc, char *argv[])
 }
 
 /**
+ * @brief client side async server starter
+ *
+ * @see
+ * @note
+ * @author auxten  <auxtenwpc@gmail.com>
+ * @date 2011-8-1
+ **/
+void * gingko_clnt_async_server(void * arg)
+{
+    gko_pool * gingko = gko_pool::getInstance();
+    gingko->setPort(RANDOM_PORT); // -1 for random port
+    gingko->setOption(&gko.opt);
+    gingko->setFuncTable(g_cmd_list, g_func_list_s, CMD_COUNT);
+    pthread_exit((void *) gingko->gko_run());
+}
+
+
+/**
  * @brief main
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int main(int argc, char *argv[])
@@ -691,7 +748,7 @@ int main(int argc, char *argv[])
     if(gingko_clnt_global_init(argc, argv) != 0)
     {
         gko_log(FATAL, "gingko_clnt_global_init failed");
-        exit(1);
+        gko_quit(1);
     }
 
     gko_log(DEBUG, "Debug mode start, i will print tons of log :p!");
@@ -700,53 +757,76 @@ int main(int argc, char *argv[])
     {
         gko_log(FATAL, FLF("pthread_init error"));
         fprintf(stderr, "Client error, quited\n");
-        exit(1);
+        gko_quit(1);
     }
-    s_async_server_arg_t serv_arg;
-    serv_arg.s_host_p = &gko.the_clnt;
     /// start check the sig_flag
     if (sig_watcher(clnt_int_worker) != 0)
     {
         gko_log(FATAL, "signal watcher start error");//todo
-        exit(1);
+        gko_quit(1);
     }
 
     if (pthread_create(&download, &g_attr, downloadworker, NULL) != 0)
     {
         gko_log(FATAL, FLF("pthread_create error"));
-        exit(1);
+        gko_quit(1);
     }
-    if (pthread_create(&upload, &g_attr, gingko_clnt_async_server,
-            (void *) (&serv_arg)) != 0)
+    if (pthread_create(&upload, &g_attr, gingko_clnt_async_server, NULL) != 0)
     {
         gko_log(FATAL, FLF("pthread_create error"));
-        exit(1);
+        gko_quit(1);
     }
     if (pthread_join(download, &status) != 0)
     {
         gko_log(FATAL, FLF("pthread_join error"));
-        exit(1);
+        gko_quit(1);
     }
     if (status != (void *)0)
     {
         gko_log(FATAL, "download failed, quiting");
-        quit_job_c(&gko.the_clnt, &gko.the_serv, g_job.uri);
-        exit(1);
+        quit_job_c(&gko_pool::gko_serv, &gko.the_serv, g_job.uri);
+        gko_quit(1);
     }
     else
     {
         if (correct_mode(&g_job))
         {
             gko_log(FATAL, "correct_mode failed");
-            quit_job_c(&gko.the_clnt, &gko.the_serv, g_job.uri);
-            exit(1);
+            quit_job_c(&gko_pool::gko_serv, &gko.the_serv, g_job.uri);
+            gko_quit(1);
         }
-        sleep(gko.opt.seed_time);
+        int sleep_time = 0;
+        if (gko.opt.seed_time > 0) /// seed time is set manually
+        {
+            sleep_time = gko.opt.seed_time;
+        }
+        else
+        {
+            if (g_job.host_set_max_size > 1)
+            {
+                sleep_time = g_job.dl_time.tv_sec * g_job.host_set->size()
+                        / g_job.host_set_max_size / DOWN_UP_TIME_RATIO;
+                if (! sleep_time)
+                {
+                    sleep_time++;
+                }
+                if (sleep_time > MAX_AUTO_SEED_TIME)
+                {
+                    sleep_time = MAX_AUTO_SEED_TIME;
+                }
+            }
+            else
+            {
+                sleep_time = 0;
+            }
+        }
+        gko_log(NOTICE, "upload for %d seconds", sleep_time);
+        sleep(sleep_time);
     }
 
-    quit_job_c(&gko.the_clnt, &gko.the_serv, g_job.uri);
+    quit_job_c(&gko_pool::gko_serv, &gko.the_serv, g_job.uri);
     gko_log(NOTICE, "upload end, client quited");
     fprintf(stderr, "upload end, client quited\n");
     pthread_clean();
-    exit(0);
+    gko_quit(0);
 }

@@ -34,7 +34,7 @@
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 extern pthread_key_t g_dir_key;
@@ -44,7 +44,7 @@ extern pthread_key_t g_dir_key;
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 GKO_STATIC_FUNC int init_struct(const char *name, const struct stat *status, int type,
@@ -92,8 +92,8 @@ GKO_STATIC_FUNC int init_struct(const char *name, const struct stat *status, int
             return 0;
         }
 
-        memcpy(&((p_dir->files + p_dir->init_s_file_t_iter)->f_stat), status,
-                sizeof(struct stat));
+//        memcpy(&((p_dir->files + p_dir->init_s_file_t_iter)->f_stat), status,
+//                sizeof(struct stat));
         (p_dir->files + p_dir->init_s_file_t_iter)->mode = status->st_mode;
         memcpy((p_dir->files + p_dir->init_s_file_t_iter)->name, name,
                 strlen(name) + 1);
@@ -112,7 +112,7 @@ GKO_STATIC_FUNC int init_struct(const char *name, const struct stat *status, int
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 GKO_STATIC_FUNC int file_counter(const char *name, const struct stat *status, int type,
@@ -145,7 +145,7 @@ GKO_STATIC_FUNC int file_counter(const char *name, const struct stat *status, in
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 GKO_STATIC_FUNC int init_total_count_size(s_job_t * jo)
@@ -184,7 +184,7 @@ GKO_STATIC_FUNC int init_total_count_size(s_job_t * jo)
         else
         {
             jo->job_state = JOB_FILE_TYPE_ERR;
-            gko_log(FATAL, "the reqeusted path %s type is special", jo->path);
+            gko_log(FATAL, "the requested path %s type is special", jo->path);
             return -1;
         }
     }
@@ -206,7 +206,7 @@ GKO_STATIC_FUNC int init_total_count_size(s_job_t * jo)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 GKO_STATIC_FUNC int init_seed(s_job_t * jo)
@@ -244,7 +244,7 @@ GKO_STATIC_FUNC int init_seed(s_job_t * jo)
         else
         {
             jo->job_state = JOB_FILE_TYPE_ERR;
-            gko_log(FATAL, "the reqeusted path %s type is special", jo->path);
+            gko_log(FATAL, "the requested path %s type is special", jo->path);
             return -1;
         }
     }
@@ -257,36 +257,13 @@ GKO_STATIC_FUNC int init_seed(s_job_t * jo)
     return 0;
 }
 
-/** temporarily not used
-static int list_file(const char *name, const struct stat *status, int type,
-        struct FTW * ftw_info)
-{
-    if (type == FTW_NS)
-        return 0;
-
-    if (type == FTW_F)
-        gko_log(NOTICE, "0%3o\tFile\t\t%lld\t\t\t%s", status->st_mode & 0777,
-                status->st_size, name);
-
-    if (type == FTW_D && strcmp(".", name) != 0)
-        gko_log(NOTICE, "0%3o\tDir\t\t%lld\t\t\t%s", status->st_mode & 0777,
-                status->st_size, name);
-
-    if (type == FTW_SL)
-        gko_log(NOTICE, "0%3o\tLink\t\t%lld\t\t\t%s", status->st_mode & 0777,
-                status->st_size, name);
-
-    return 0;
-}
-**/
-
 
 /**
  * @brief init the s_job_t s_block_t s_file_t struct for the job
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int recurse_dir(s_job_t * jo)
@@ -307,6 +284,7 @@ int recurse_dir(s_job_t * jo)
      **/
     GKO_INT64 blk_cnt;
     GKO_INT64 min_full_blk_cnt;
+    gettimeofday(&jo->dl_time, NULL);
     if(init_total_count_size(jo) != 0)
     {
         gko_log(FATAL, "init_total_count_size error");

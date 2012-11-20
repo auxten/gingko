@@ -15,6 +15,6 @@ int setblock(int fd);
 /// gracefully close a socket, for client side
 int close_socket(int sock);
 /// connect to a host
-int connect_host(s_host_t * h, int recv_sec, int send_sec);
+int connect_host(const s_host_t * h, const int recv_sec, const int send_sec);
 
 #endif /** SOCKET_H_ **/

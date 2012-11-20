@@ -72,37 +72,84 @@ struct conn_server
     void (* on_data_callback)(int, void *, unsigned int);
 };
 
-/// Accept new connection, start listen etc.
-int conn_tcp_server(struct conn_server *c);
-/// Accept new connection
-void conn_tcp_server_accept(int fd, short ev, void *arg);
-/// Accept new connection
-struct conn_client * add_new_conn_client(int client_fd);
-/// Event on data from client
-void conn_tcp_server_on_data(int fd, short ev, void *arg);
-/// Event on data from client
-int conn_client_list_find_free();
-/// Event on data from client
-int conn_client_clear(struct conn_client *client);
-/// Event on data from client
-int conn_client_free(struct conn_client *client);
-/// Get client object from pool by given client_id
-struct conn_client * conn_client_list_get(int id);
-/// close conn, shutdown && close
-int conn_close();
+class gko_pool
+{
+public:
+    static s_host_t gko_serv;
 
+    static gko_pool *getInstance();
+    static void setFuncTable(char(*cmd_list)[CMD_LEN], func_t * func_list,
+            int cmdcount);
 
-/// close conn, shutdown && close
-void * thread_worker_init(void *arg);
-/// close conn, shutdown && close
-void thread_worker_process(int fd, short ev, void *arg);
-/// Dispatch to worker
-void thread_worker_dispatch(int sig_id);
-/// init the whole thread pool
-int thread_init();
-/// client side async server starter
-void * gingko_clnt_async_server(void * arg);
-/// server side async server starter
-int gingko_serv_async_server();
+    int getPort() const;
+    void setPort(int port);
+    s_option_t *getOption() const;
+    void setOption(s_option_t *option);
+
+    /// close conn, shutdown && close
+    int conn_close();
+    /// global run func
+    int gko_run();
+    int gko_loopexit(int timeout);
+
+private:
+    static gko_pool * _instance;
+    /// FUNC DICT
+    static char (* cmd_list_p)[CMD_LEN];
+    ///server func list
+    static func_t * func_list_p;
+    /// cmd type conut
+    static int cmd_count;
+    /// global lock
+    static pthread_mutex_t instance_lock;
+
+    int g_curr_thread;
+    struct thread_worker ** g_worker_list;
+    struct event_base *g_ev_base;
+    int g_total_clients;
+    struct conn_client **g_client_list;
+    struct conn_server *g_server;
+    int port;
+    s_option_t * option;
+
+    static void conn_send_data(int fd, void *str, unsigned int len);
+    /// Accept new connection
+    static void conn_tcp_server_accept(int fd, short ev, void *arg);
+    /// close conn, shutdown && close
+    static void * thread_worker_init(void *arg);
+    /// close conn, shutdown && close
+    static void thread_worker_process(int fd, short ev, void *arg);
+    /// Event on data from client
+    static void conn_tcp_server_on_data(int fd, short ev, void *arg);
+    /// parse the request return the proper func handle num
+    static int parse_req(char *req);
+
+    int thread_worker_new(int id);
+    int thread_list_find_next(void);
+    int conn_client_list_init(void);
+    int gingko_serv_async_server_base_init(void);
+    int gingko_clnt_async_server_base_init(s_host_t * the_host);
+    int gko_async_server_base_init(void);
+    /// Accept new connection, start listen etc.
+    int conn_tcp_server(struct conn_server *c);
+    /// Accept new connection
+    struct conn_client * add_new_conn_client(int client_fd);
+    /// Event on data from client
+    int conn_client_list_find_free();
+    /// clear client struct
+    int conn_client_clear(struct conn_client *client);
+    /// clear the "session"
+    int conn_client_free(struct conn_client *client);
+    /// Get client object from pool by given client_id
+    struct conn_client * conn_client_list_get(int id);
+    /// Dispatch to worker
+    void thread_worker_dispatch(int sig_id);
+    /// init the whole thread pool
+    int thread_init();
+    /// construct func
+    gko_pool(const int pt);
+    /// another construct func
+    gko_pool();
+};
 
 #endif /** ASYNC_POOL_H_ **/

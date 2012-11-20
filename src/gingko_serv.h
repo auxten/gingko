@@ -16,7 +16,7 @@
  *
  * @see s_job_t struct
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int erase_job(std::string &uri_string);

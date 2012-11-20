@@ -13,13 +13,13 @@
 #include "socket.h"
 #include "hash/xor_hash.h"
 
-extern s_gingko_global_t gko;
 
-static struct event_base *g_ev_base;
-static int g_total_clients;
-static struct conn_client **g_client_list;
-static struct conn_server *g_server;
-
+gko_pool *gko_pool::_instance           = NULL;
+char (*gko_pool::cmd_list_p)[CMD_LEN]   = NULL;
+func_t *gko_pool::func_list_p           = NULL;
+int gko_pool::cmd_count                 = 0;
+pthread_mutex_t gko_pool::instance_lock = PTHREAD_MUTEX_INITIALIZER;
+s_host_t gko_pool::gko_serv             = {"\0", 0};
 
 /**
  * @brief Initialization of client list
@@ -29,20 +29,20 @@ static struct conn_server *g_server;
  * @author wangpengcheng01
  * @date 2011-8-1
  **/
-GKO_STATIC_FUNC int conn_client_list_init()
+int gko_pool::conn_client_list_init()
 {
-    g_client_list = new struct conn_client *[gko.opt.connlimit];
+    g_client_list = new struct conn_client *[option->connlimit];
     if (g_client_list == NULL)
     {
         gko_log(FATAL, "Malloc error, cannot init client pool");
         return -1;
     }
-    memset(g_client_list, 0, gko.opt.connlimit * sizeof(struct conn_client *));
+    memset(g_client_list, 0, option->connlimit * sizeof(struct conn_client *));
     g_total_clients = 0;
 
-    gko_log(NOTICE, "Client pool initialized as %d", gko.opt.connlimit);
+    gko_log(NOTICE, "Client pool initialized as %d", option->connlimit);
 
-    return gko.opt.connlimit;
+    return option->connlimit;
 }
 
 /**
@@ -50,15 +50,20 @@ GKO_STATIC_FUNC int conn_client_list_init()
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-GKO_STATIC_FUNC int gingko_serv_async_server_base_init()
+int gko_pool::gingko_serv_async_server_base_init()
 {
     g_server = new struct conn_server;
+    if(! g_server)
+    {
+        gko_log(FATAL, "new for g_server failed");
+        return -1;
+    }
     memset(g_server, 0, sizeof(struct conn_server));
-    g_server->srv_addr = gko.opt.bind_ip;
-    g_server->srv_port = gko.opt.port;
+    g_server->srv_addr = option->bind_ip;
+    g_server->srv_port = option->port;
     g_server->listen_queue_length = REQ_QUE_LEN;
     g_server->nonblock = 1;
     g_server->tcp_nodelay = 1;
@@ -82,12 +87,12 @@ GKO_STATIC_FUNC int gingko_serv_async_server_base_init()
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-GKO_STATIC_FUNC int gingko_clnt_async_server_base_init(s_host_t * the_host)
+int gko_pool::gingko_clnt_async_server_base_init(s_host_t * the_host)
 {
-    unsigned int randseed = (unsigned int)time(NULL);
+    unsigned int randseed = (unsigned int)getpid();
     int port = MAX_LIS_PORT - rand_r(&randseed) % 500;
     g_server = new struct conn_server;
     if(! g_server)
@@ -96,7 +101,7 @@ GKO_STATIC_FUNC int gingko_clnt_async_server_base_init(s_host_t * the_host)
     	return -1;
     }
     memset(g_server, 0, sizeof(struct conn_server));
-    g_server->srv_addr = gko.opt.bind_ip;
+    g_server->srv_addr = option->bind_ip;
     g_server->srv_port = port;
     g_server->listen_queue_length = REQ_QUE_LEN;
     g_server->nonblock = 1;
@@ -132,14 +137,76 @@ GKO_STATIC_FUNC int gingko_clnt_async_server_base_init(s_host_t * the_host)
 }
 
 /**
+ * @brief Init for gingko_clnt
+ *
+ * @see
+ * @note
+ * @author auxten  <auxtenwpc@gmail.com>
+ * @date 2011-8-1
+ **/
+int gko_pool::gko_async_server_base_init()
+{
+    g_server = new struct conn_server;
+    if(! g_server)
+    {
+        gko_log(FATAL, "new for g_server failed");
+        return -1;
+    }
+    memset(g_server, 0, sizeof(struct conn_server));
+    g_server->srv_addr = option->bind_ip;
+    if (this->port < 0)
+    {
+        unsigned int randseed = (unsigned int)getpid();
+        int pt = MAX_LIS_PORT - rand_r(&randseed) % 500;
+        g_server->srv_port = pt;
+    }
+    else
+    {
+        g_server->srv_port = this->port;
+    }
+    g_server->listen_queue_length = REQ_QUE_LEN;
+    g_server->nonblock = 1;
+    g_server->tcp_nodelay = 1;
+    g_server->tcp_reuse = 1;
+    g_server->tcp_send_buffer_size = TCP_BUF_SZ;
+    g_server->tcp_recv_buffer_size = TCP_BUF_SZ;
+    g_server->send_timeout = SND_TIMEOUT;
+    g_server->on_data_callback = conn_send_data;
+    g_server->is_server = this->port < 0 ? 0 : 1;
+    /// A new TCP server
+    int ret;
+    while ((ret = conn_tcp_server(g_server)) < 0)
+    {
+        if (ret == BIND_FAIL)
+        {
+            if (g_server->srv_port < MIN_PORT || this->port >= 0)
+            {
+                gko_log(FATAL, "bind port failed, last try is %d", port);
+                return -1;
+            }
+            g_server->srv_port --;
+            usleep(BIND_INTERVAL);
+        }
+        else
+        {
+            gko_log(FATAL, "conn_tcp_server start error");
+            return -1;
+        }
+    }
+
+    gko_serv.port = g_server->srv_port;
+    return g_server->srv_port;
+}
+
+/**
  * @brief Generate a TCP server by given struct
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-int conn_tcp_server(struct conn_server *c)
+int gko_pool::conn_tcp_server(struct conn_server *c)
 {
     if (g_server->srv_port > MAX_PORT)
     {
@@ -235,10 +302,10 @@ int conn_tcp_server(struct conn_server *c)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-void conn_tcp_server_accept(int fd, short ev, void *arg)
+void gko_pool::conn_tcp_server_accept(int fd, short ev, void *arg)
 {
     int client_fd;
     struct sockaddr_in client_addr;
@@ -253,7 +320,7 @@ void conn_tcp_server_accept(int fd, short ev, void *arg)
         return;
     }
     /// Add connection to event queue
-    client = add_new_conn_client(client_fd);
+    client = gko_pool::getInstance()->add_new_conn_client(client_fd);
     if (!client)
     {
         ///close socket and further receives will be disallowed
@@ -268,7 +335,7 @@ void conn_tcp_server_accept(int fd, short ev, void *arg)
     /// Try to set non-blocking
     if (setnonblock(client_fd) < 0)
     {
-        conn_client_free(client);
+        gko_pool::getInstance()->conn_client_free(client);
         gko_log(FATAL, "Client socket set non-blocking error");
         return;
     }
@@ -277,7 +344,7 @@ void conn_tcp_server_accept(int fd, short ev, void *arg)
     client->client_addr = inet_addr(inet_ntoa(client_addr.sin_addr));
     client->client_port = client_addr.sin_port;
     client->conn_time = time((time_t *) NULL);
-    thread_worker_dispatch(client->id);
+    gko_pool::getInstance()->thread_worker_dispatch(client->id);
 
     return;
 }
@@ -287,10 +354,10 @@ void conn_tcp_server_accept(int fd, short ev, void *arg)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-void conn_send_data(int fd, void *str, unsigned int len)
+void gko_pool::conn_send_data(int fd, void *str, unsigned int len)
 {
     int i;
     char * p = (char *) str;
@@ -299,7 +366,11 @@ void conn_send_data(int fd, void *str, unsigned int len)
     {
         gko_log(NOTICE, "got req: %s, index: %d", p, i);
     }
-    (*gko.func_list_p[i])(p, fd);
+    else
+    {
+        gko_log(DEBUG, "got req: %s, index: %d", p, i);
+    }
+    (*func_list_p[i])(p, fd);
     ///gko_log(NOTICE, "read_buffer:%s", p);
     return;
 }
@@ -309,15 +380,18 @@ void conn_send_data(int fd, void *str, unsigned int len)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-void conn_tcp_server_on_data(int fd, short ev, void *arg)
+void gko_pool::conn_tcp_server_on_data(int fd, short ev, void *arg)
 {
     struct conn_client *client = (struct conn_client *) arg;
     int res;
     unsigned int buffer_avail;
     int read_counter = 0;
+    unsigned short proto_ver;
+    int msg_len;
+    char nouse_buf[CMD_PREFIX_BYTE];
 
     if (!client || !client->client_fd)
     {
@@ -327,8 +401,47 @@ void conn_tcp_server_on_data(int fd, short ev, void *arg)
     if (fd != client->client_fd)
     {
         /// Sanity
-        conn_client_free(client);
+        gko_pool::getInstance()->conn_client_free(client);
         return;
+    }
+
+    /// read the proto ver
+    if (read(client->client_fd, &proto_ver, sizeof(proto_ver)) <= 0)
+    {
+        if (errno != EAGAIN && errno != EWOULDBLOCK)
+        {
+            gko_log(WARNING, "Socket read proto_ver error %d", errno);
+            gko_pool::getInstance()->conn_client_free(client);
+            return;
+        }
+    }
+    if (proto_ver != PROTO_VER)
+    {
+        gko_log(WARNING, FLF("unsupported proto_ver"));
+        return;
+    }
+
+    /// read the nouse_buf
+    if (read(client->client_fd, nouse_buf,
+            CMD_PREFIX_BYTE - sizeof(proto_ver) - sizeof(msg_len)) <= 0)
+    {
+        if (errno != EAGAIN && errno != EWOULDBLOCK)
+        {
+            gko_log(WARNING, "Socket read nouse_buf error %d", errno);
+            gko_pool::getInstance()->conn_client_free(client);
+            return;
+        }
+    }
+
+    /// read the msg_len
+    if (read(client->client_fd, &msg_len, sizeof(msg_len)) <= 0)
+    {
+        if (errno != EAGAIN && errno != EWOULDBLOCK)
+        {
+            gko_log(WARNING, "Socket read msg_len error %d", errno);
+            gko_pool::getInstance()->conn_client_free(client);
+            return;
+        }
     }
 
     if (!client->read_buffer)
@@ -338,7 +451,7 @@ void conn_tcp_server_on_data(int fd, short ev, void *arg)
         if(! client->read_buffer)
         {
         	gko_log(FATAL, "new for client->read_buffer failed");
-            conn_client_free(client);
+        	gko_pool::getInstance()->conn_client_free(client);
             return;
         }
         client->buffer_size = buffer_avail = CLNT_READ_BUFFER_SIZE;
@@ -351,47 +464,30 @@ void conn_tcp_server_on_data(int fd, short ev, void *arg)
     while ((res = read(client->client_fd, client->read_buffer + read_counter,
             buffer_avail)) > 0)
     {
-        ///gko_log(NOTICE, "res: %d",res);
-        ///gko_log(NOTICE, "%s",client->read_buffer+read_counter);
         read_counter += res;
-        if ((unsigned int)res == buffer_avail)
-        {
-            client->buffer_size *= 2;
-            char * tmp = client->read_buffer;
-            client->read_buffer = new char[client->buffer_size];
-            if (client->read_buffer == NULL)
-            {
-                gko_log(FATAL, "realloc error");
-                conn_client_free(client);
-                return;
-            }
-            memcpy(client->read_buffer, tmp, read_counter);
-            delete [] tmp;
-        }
         buffer_avail = client->buffer_size - read_counter;
-        memset(client->read_buffer + read_counter, 0, buffer_avail);
+        if (read_counter == msg_len)
+        {
+            *(client->read_buffer + read_counter) = '\0';
+            break;
+        }
     }
     if (res < 0)
     {
         if (errno != EAGAIN && errno != EWOULDBLOCK)
         {
-            ///#define EAGAIN      35      /** Resource temporarily unavailable **/
-            ///#define EWOULDBLOCK EAGAIN      /** Operation would block **/
-            ///#define EINPROGRESS 36      /** Operation now in progress **/
-            ///#define EALREADY    37      /** Operation already in progress **/
-            //perror("Socket read error");
             gko_log(WARNING, "Socket read error %d", errno);
-            conn_client_free(client);
+            gko_pool::getInstance()->conn_client_free(client);
             return;
         }
     }
     ///gko_log(NOTICE, "read_buffer:%s", client->read_buffer);///test
-    if (g_server->on_data_callback)
+    if (gko_pool::getInstance()->g_server->on_data_callback)
     {
-        g_server->on_data_callback(client->client_fd,
+        gko_pool::getInstance()->g_server->on_data_callback(client->client_fd,
                 (void *) client->read_buffer, sizeof(client->read_buffer));
     }
-    conn_client_free(client);
+    gko_pool::getInstance()->conn_client_free(client);
 
     return;
 }
@@ -401,16 +497,16 @@ void conn_tcp_server_on_data(int fd, short ev, void *arg)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-struct conn_client * add_new_conn_client(int client_fd)
+struct conn_client * gko_pool::add_new_conn_client(int client_fd)
 {
     int id;
     struct conn_client *tmp = (struct conn_client *) NULL;
     /// Find a free slot
     id = conn_client_list_find_free();
-    ///gko_log(NOTICE, "add_new_conn_client id %d",id);///test
+    gko_log(DEBUG, "add_new_conn_client id %d",id);///test
     if (id >= 0)
     {
         tmp = g_client_list[id];
@@ -427,7 +523,8 @@ struct conn_client * add_new_conn_client(int client_fd)
     else
     {
         /// FIXME
-        ///Client list pool full, if you want to enlarge it, modify async_pool.h source please
+        /// Client list pool full, if you want to enlarge it,
+        /// modify async_pool.h source please
         gko_log(WARNING, "Client list full");
         return tmp;
     }
@@ -449,14 +546,14 @@ struct conn_client * add_new_conn_client(int client_fd)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-int conn_client_list_find_free()
+int gko_pool::conn_client_list_find_free()
 {
     int i;
 
-    for (i = 0; i < gko.opt.connlimit; i++)
+    for (i = 0; i < option->connlimit; i++)
     {
         if (!g_client_list[i] || 0 == g_client_list[i]->conn_time)
         {
@@ -472,10 +569,10 @@ int conn_client_list_find_free()
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-int conn_client_free(struct conn_client *client)
+int gko_pool::conn_client_free(struct conn_client *client)
 {
     if (!client || !client->client_fd)
     {
@@ -495,15 +592,14 @@ int conn_client_free(struct conn_client *client)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-int conn_client_clear(struct conn_client *client)
+int gko_pool::conn_client_clear(struct conn_client *client)
 {
     if (client)
     {
         /// Clear all data
-        client->conn_time = 0;
         client->client_fd = 0;
         client->client_addr = 0;
         client->client_port = 0;
@@ -515,6 +611,11 @@ int conn_client_clear(struct conn_client *client)
         }
         /// Delete event
         event_del(&client->ev_read);
+        /**
+         * this is the flag of client usage,
+         * we must put it in the last place
+         */
+        client->conn_time = 0;
         return 0;
     }
     return -1;
@@ -525,12 +626,63 @@ int conn_client_clear(struct conn_client *client)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-struct conn_client * conn_client_list_get(int id)
+struct conn_client * gko_pool::conn_client_list_get(int id)
 {
     return g_client_list[id];
+}
+
+gko_pool::gko_pool(const int pt)
+    :
+        g_curr_thread(0), port(pt)
+{
+    g_ev_base = (struct event_base*)event_init();
+    if (!g_ev_base)
+    {
+        gko_log(FATAL, "event init failed");
+    }
+}
+
+gko_pool::gko_pool()
+    :
+        g_curr_thread(0)
+
+{
+    g_ev_base = (struct event_base*)event_init();
+    if (!g_ev_base)
+    {
+        gko_log(FATAL, "event init failed");
+    }
+}
+
+int gko_pool::getPort() const
+{
+    return port;
+}
+
+void gko_pool::setPort(int port)
+{
+    this->port = port;
+}
+
+s_option_t *gko_pool::getOption() const
+{
+    return option;
+}
+
+void gko_pool::setOption(s_option_t *option)
+{
+    this->option = option;
+}
+
+void gko_pool::setFuncTable(char(*cmd_list)[CMD_LEN], func_t * func_list,
+        int cmdcount)
+{
+    cmd_list_p = cmd_list;
+    func_list_p = func_list;
+    cmd_count = cmdcount;
 }
 
 /**
@@ -538,13 +690,13 @@ struct conn_client * conn_client_list_get(int id)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-int conn_close()
+int gko_pool::conn_close()
 {
 
-    for (int i = 0; i < gko.opt.connlimit; i++)
+    for (int i = 0; i < option->connlimit; i++)
     {
         conn_client_free(g_client_list[i]);
     }
@@ -556,79 +708,38 @@ int conn_close()
     return 0;
 }
 
-/**
- * @brief client side async server starter
- *
- * @see
- * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
- * @date 2011-8-1
- **/
-void * gingko_clnt_async_server(void * arg)
-{
-    s_async_server_arg_t * arg_p = (s_async_server_arg_t *) arg;
-    g_ev_base = (struct event_base*)event_init();
-    if (!g_ev_base)
+gko_pool *gko_pool::getInstance()
+{   if (! _instance)
     {
-        gko_log(FATAL, "event init failed");
-        exit(1);
+        pthread_mutex_lock(&instance_lock);
+        if (! _instance)
+        {
+            _instance = new gko_pool();
+        }
+        pthread_mutex_unlock(&instance_lock);
     }
+    return _instance;
+}
 
-    if (gingko_clnt_async_server_base_init(arg_p->s_host_p))
+int gko_pool::gko_run()
+{
+
+    if (gko_async_server_base_init() < 0)
     {
-        gko_log(FATAL, "gingko_clnt_async_server_base_init failed");
-        exit(1);
+        gko_log(FATAL, "gko_async_server_base_init failed");
+        return -2;
     }
 
     if (conn_client_list_init() < 1)
     {
         gko_log(FATAL, "conn_client_list_init failed");
-        exit(1);
+        return -3;
     }
     if (thread_init() != 0)
     {
         gko_log(FATAL, FLF("thread_init failed"));
-        exit(1);
+        return -4;
     }
-    event_base_loop(g_ev_base, 0);
-    pthread_exit((void *) 0);
+
+    return event_base_loop(g_ev_base, 0);
 }
-
-/**
- * @brief server side async server starter
- *
- * @see
- * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
- * @date 2011-8-1
- **/
-int gingko_serv_async_server()
-{
-    g_ev_base = (struct event_base*)event_init();
-    if (!g_ev_base)
-    {
-        gko_log(FATAL, "event init failed");
-        return -1;
-    }
-
-    if (gingko_serv_async_server_base_init() != 0)
-    {
-        gko_log(FATAL, "gingko_clnt_async_server_base_init failed");
-        return -1;
-    }
-
-    if (conn_client_list_init() < 1)
-    {
-        gko_log(FATAL, "conn_client_list_init failed");
-        return -1;
-    }
-    if (thread_init() != 0)
-    {
-        gko_log(FATAL, FLF("thread_init failed"));
-        return -1;
-    }
-    event_base_loop(g_ev_base, 0);
-
-    return 0;
-}
-

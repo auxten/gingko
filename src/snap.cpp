@@ -18,7 +18,7 @@ extern s_gingko_global_t gko;
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 void dump_progress(s_job_t * jo, s_block_t * blk)
@@ -58,7 +58,7 @@ void dump_progress(s_job_t * jo, s_block_t * blk)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int load_snap(s_job_t * jo)

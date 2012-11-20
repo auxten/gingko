@@ -10,7 +10,8 @@
 #define XOR_HASH_H_
 
 /// shift Macro
-#define ROLL(h) (((h) << 7) ^ ((h) >> 25))
+//#define ROLL(h) (((h) << 7) ^ ((h) >> 25))
+#define ROLL(h) (h * 16777619)
 
 /// xor hash a given length buf
 unsigned xor_hash(const void *key, int len, unsigned hval);

@@ -24,6 +24,6 @@ int helo_serv_c(void * arg, int fd, s_host_t * server);
 void * join_job_c(void * arg, int fd);
 
 /// send QUIT handler
-int quit_job_c(s_host_t * quit_host, s_host_t * server, char * uri);
+int quit_job_c(const s_host_t * quit_host, const s_host_t * server, const char * uri);
 
 #endif /* GINGKO_CLNT_H_ */

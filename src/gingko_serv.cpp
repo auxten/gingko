@@ -31,6 +31,10 @@
 #include <pthread.h>
 #ifdef __APPLE__
 #include <sys/uio.h>
+#elif defined (__FreeBSD__)
+#include <sys/uio.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 #else
 #include <sys/sendfile.h>
 #endif /** __APPLE__ **/
@@ -66,7 +70,7 @@ extern std::map<std::string, s_job_t *> g_m_jobs;
  *
  * @see s_job_t struct
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int erase_job(std::string &uri_string)

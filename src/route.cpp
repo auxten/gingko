@@ -16,6 +16,7 @@
 #include "progress.h"
 #include "gingko_clnt.h"
 #include "log.h"
+#include "async_pool.h"
 
 GINGKO_OVERLOAD_S_HOST_EQ
 
@@ -27,14 +28,15 @@ extern s_gingko_global_t gko;
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 const bool cmpByDistance(const s_host_t & h1, const s_host_t & h2)
 {
     ///return abs(h1.port - 59999) > abs(h2.port - 59999);
-    return host_distance(&gko.the_clnt, &h1)
-            < host_distance(&gko.the_clnt, &h2);
+    s_host_t * server = & gko_pool::gko_serv;
+    return host_distance(server, &h1)
+            < host_distance(server, &h2);
 }
 
 /**
@@ -42,24 +44,26 @@ const bool cmpByDistance(const s_host_t & h1, const s_host_t & h2)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int get_blk_src(s_job_t * jo, unsigned src_max, GKO_INT64 blk_idx,
         std::vector<s_host_t> * h_vec)
 {
-    GKO_UINT64 max = MIN(src_max + 1, (*jo->host_set).size());
     s_block_t * b;
+    const GKO_INT64 start_idx = blk_idx;
+
+    (*h_vec).clear();
+    GKO_UINT64 max = MIN(src_max + 1, (*jo->host_set).size());
     /// count back blk to find the upper stream src
     /// Note that, the src count may be more than the max
-    (*h_vec).clear();
     while ((*h_vec).size() < max)
     {
         b = jo->blocks + blk_idx;
         pthread_mutex_lock(&g_blk_hostset_lock);
         if (b->host_set != NULL && (*(b->host_set)).size() != 0)
         {
-            for (std::set<s_host_t>::iterator i = (*(b->host_set)).begin(); i
+            for (std::set<s_host_t>::const_iterator i = (*(b->host_set)).begin(); i
                     != (*(b->host_set)).end(); i++)
             {
                 if (find((*h_vec).begin(), (*h_vec).end(), *i)
@@ -72,6 +76,15 @@ int get_blk_src(s_job_t * jo, unsigned src_max, GKO_INT64 blk_idx,
         pthread_mutex_unlock(&g_blk_hostset_lock);
         ///printf("blk_idx: %lld\n", blk_idx);
         blk_idx = prev_b(jo, blk_idx);
+
+        /**
+         * in case of dead lock, when a client quit between
+         * max is decided and the while loop is started
+         */
+        if (blk_idx == start_idx)
+        {
+            break;
+        }
     }
     /// sort the src by distance, cause we just need the first src_max+1
     sort((*h_vec).begin(), (*h_vec).end(), cmpByDistance);
@@ -87,7 +100,7 @@ int get_blk_src(s_job_t * jo, unsigned src_max, GKO_INT64 blk_idx,
  * @see
  * @return only return 0 or positive num
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int decide_src(s_job_t * jo, int src_max, GKO_INT64 blk_idx,
@@ -96,7 +109,7 @@ int decide_src(s_job_t * jo, int src_max, GKO_INT64 blk_idx,
     int num;
     int host_i = 0;
     int blk_i = 0;
-    static struct timeval before_tv;
+    struct timeval before_tv;
     struct timeval after_tv;
     GKO_INT64 fastest_time = MAX_INT64;
     GKO_INT64 tmp_time;
@@ -110,7 +123,7 @@ int decide_src(s_job_t * jo, int src_max, GKO_INT64 blk_idx,
         /**
          * if the first host in the vector is myself, pass it
          **/
-        if (host_distance(&gko.the_clnt, &(*i)) == 0)
+        if (host_distance(&gko_pool::gko_serv, &(*i)) == 0)
         {
             continue;
         }
@@ -128,7 +141,7 @@ int decide_src(s_job_t * jo, int src_max, GKO_INT64 blk_idx,
          * get one block and calculate the time used
          **/
         gettimeofday(&before_tv, NULL);
-        num = get_blocks_c(jo, &(*i), blk_idx + blk_i, 1, 0 & ~W_DISK, buf);
+        num = get_blocks_c(jo, &(*i), (blk_idx + blk_i) % jo->block_count, 1, 0 & ~W_DISK, buf);
         gettimeofday(&after_tv, NULL);
         b = jo->blocks + (blk_idx + blk_i) % jo->block_count;
         if (num == 1 && digest_ok(buf, b))

@@ -26,7 +26,7 @@
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int setnonblock(int fd)
@@ -55,7 +55,7 @@ int setnonblock(int fd)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int setblock(int fd)
@@ -88,10 +88,10 @@ int setblock(int fd)
  *     recv_sec: receive timeout seconds, 0 for never timeout
  *     return the socket when succ
  *     return < 0 when error, specially HOST_DOWN_FAIL indicate host dead
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-int connect_host(s_host_t * h, int recv_sec, int send_sec)
+int connect_host(const s_host_t * h, const int recv_sec, const int send_sec)
 {
     int sock = -1;
     int ret;
@@ -235,22 +235,11 @@ int connect_host(s_host_t * h, int recv_sec, int send_sec)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int close_socket(int sock)
 {
-    ///  if (shutdown(sock, 2)) {
-    ///      gko_log(WARNING, "shutdown sock error");
-    ///      return -1;
-    ///  }
-//    struct linger so_linger;
-//    so_linger.l_onoff = 1; /// close right now, no time_wait at serv
-//    so_linger.l_linger = 0; /// at most wait for 1s
-//    if (FAIL_CHECK(setsockopt(sock, SOL_SOCKET, SO_LINGER, &so_linger, sizeof(so_linger))))
-//    {
-//        gko_log(WARNING, "set so_linger failed");
-//    }
     if (FAIL_CHECK(close(sock)))
     {
         gko_log(WARNING, "close sock error");

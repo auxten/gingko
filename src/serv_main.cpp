@@ -33,6 +33,10 @@
 #include <pthread.h>
 #ifdef __APPLE__
 #include <sys/uio.h>
+#elif defined (__FreeBSD__)
+#include <sys/uio.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 #else
 #include <sys/sendfile.h>
 #endif /** __APPLE__ **/
@@ -60,6 +64,7 @@ using namespace std;
 pthread_mutex_t g_grand_lock;
 ///job specific lock
 s_lock_t g_job_lock[MAX_JOBS];
+///for TLS
 pthread_key_t g_dir_key;
 /************** PTHREAD STUFF **************/
 
@@ -81,7 +86,7 @@ s_gingko_global_t gko;
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 GKO_STATIC_FUNC int init_daemon(void)
@@ -142,7 +147,7 @@ GKO_STATIC_FUNC int init_daemon(void)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 GKO_STATIC_FUNC int pthread_init()
@@ -174,7 +179,7 @@ GKO_STATIC_FUNC int pthread_init()
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 GKO_STATIC_FUNC int pthread_clean()
@@ -206,7 +211,7 @@ GKO_STATIC_FUNC int pthread_clean()
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 GKO_STATIC_FUNC void serv_int_handler(const int sig)
@@ -220,7 +225,7 @@ GKO_STATIC_FUNC void serv_int_handler(const int sig)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-9
  **/
 GKO_STATIC_FUNC void * serv_int_worker(void * a)
@@ -231,8 +236,8 @@ GKO_STATIC_FUNC void * serv_int_worker(void * a)
         {
             gko_log(WARNING, "SIGNAL handled, server terminated");
             /// Clear all status
-            conn_close();
-            exit(2);
+            gko_pool::getInstance()->conn_close();
+            gko_quit(2);
         }
         usleep(CK_SIG_INTERVAL);
     }
@@ -243,13 +248,13 @@ GKO_STATIC_FUNC void * serv_int_worker(void * a)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 GKO_STATIC_FUNC int gingko_serv_global_init(int argc, char *argv[])
 {
     memset(&gko, 0, sizeof(gko));
-    if(serv_parse_opt(argc, argv) == 0)
+    if (serv_parse_opt(argc, argv) == 0)
     {
         gko_log(NOTICE, "opts parsed successfully");
     }
@@ -259,26 +264,51 @@ GKO_STATIC_FUNC int gingko_serv_global_init(int argc, char *argv[])
     }
     umask(0);
 
-    if(check_ulimit() != 0)
+    if (check_ulimit() != 0)
     {
         return -1;
     }
 
-    if (init_daemon())
-    {
-        gko_log(FATAL, "init_daemon failed");
+    // forbid gkod  run in root
+    if (geteuid() == 0) {
+        gko_log(FATAL, "gkod should not run with root!");
         return -1;
+    }
+
+    if (gko.opt.daemon_mode)
+    {
+        if (init_daemon())
+        {
+            gko_log(FATAL, "init_daemon failed");
+            return -1;
+        }
     }
     set_sig(serv_int_handler);
     /**
      * init global vars stuff
      **/
     gko.ready_to_serv = 1;
-    gko.cmd_list_p = g_cmd_list;
-    gko.func_list_p = g_func_list_s;
     gko.sig_flag = 0;
 
     return 0;
+}
+
+/**
+ * @brief server side async server starter
+ *
+ * @see
+ * @note
+ * @author auxten  <auxtenwpc@gmail.com>
+ * @date 2011-8-1
+ **/
+int gingko_serv_async_server()
+{
+    gko_pool * gingko = gko_pool::getInstance();
+    gingko->setPort(gko.opt.port);
+    gingko->setOption(&gko.opt);
+    gingko->setFuncTable(g_cmd_list, g_func_list_s, CMD_COUNT);
+
+    return gingko->gko_run();
 }
 
 /**
@@ -286,7 +316,7 @@ GKO_STATIC_FUNC int gingko_serv_global_init(int argc, char *argv[])
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int main(int argc, char *argv[])
@@ -296,7 +326,7 @@ int main(int argc, char *argv[])
     {
         gko_log(FATAL, "gingko_serv_global_init failed");
         fprintf(stderr, "Server error, quited\n");
-        exit(1);
+        gko_quit(1);
     }
 
     gko_log(DEBUG, "Debug mode start, i will print tons of log :p!");
@@ -305,19 +335,20 @@ int main(int argc, char *argv[])
     {
         gko_log(FATAL, FLF("pthread_init error"));
         fprintf(stderr, "Server error, quited\n");
-        exit(1);
+        gko_quit(1);
     }
     if (sig_watcher(serv_int_worker))
     {
         gko_log(FATAL, "signal watcher start error");
         fprintf(stderr, "Server error, quited\n");
-        exit(1);
+        gko_quit(1);
     }
     if (gingko_serv_async_server() != 0)
     {
         gko_log(WARNING, "gingko_serv_async_server error");
-        exit(1);
+        gko_quit(1);
     }
+    /// basically it will never run here...
     pthread_clean();
     return 0;
 }

@@ -22,6 +22,8 @@
 #include <sys/socket.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
+#include <sys/select.h>
+#include <sys/time.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
@@ -35,6 +37,10 @@
 #include <inttypes.h>
 #ifdef __APPLE__
 #include <sys/uio.h>
+#elif defined (__FreeBSD__)
+#include <sys/uio.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 #else
 #include <sys/sendfile.h>
 #endif /** __APPLE__ **/
@@ -89,7 +95,7 @@ extern s_gingko_global_t gko;
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 s_host_hash_result_t * host_hash(s_job_t * jo, const s_host_t * new_host,
@@ -107,8 +113,8 @@ s_host_hash_result_t * host_hash(s_job_t * jo, const s_host_t * new_host,
     GKO_UINT64 host_key = (((GKO_UINT64) inet_addr(new_host->addr)) << 32)
             + ((new_host->port) << 16);
     GKO_UINT64 vnode_distance =
-            (jo->block_count / VNODE_NUM / 3) ? (host_key % (jo->block_count
-                    / VNODE_NUM / 3) + (jo->block_count * 2 / VNODE_NUM / 3))
+            (jo->block_count / VNODE_NUM / 7) ? (host_key % (jo->block_count
+                    / VNODE_NUM / 7) + (jo->block_count * 6 / VNODE_NUM / 7))
                     : 1;
     gko_log(NOTICE, "host_key: %lld, ip: %s, port: %d, usage: %d", host_key,
             new_host->addr, new_host->port, usage);
@@ -167,11 +173,29 @@ s_host_hash_result_t * host_hash(s_job_t * jo, const s_host_t * new_host,
 }
 
 /**
+ * @brief update host_set_max_size
+ *
+ * @see
+ * @note
+ * @author auxten  <auxtenwpc@gmail.com>
+ * @date Jan 5, 2012
+ **/
+void update_host_max(s_job_t * job)
+{
+//    pthread_mutex_lock(&g_clnt_lock);
+    if (job->host_set->size() > (unsigned)job->host_set_max_size)
+    {
+        job->host_set_max_size = job->host_set->size();
+    }
+//    pthread_mutex_unlock(&g_clnt_lock);
+}
+
+/**
  * @brief sent GET handler
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 GKO_INT64 get_blocks_c(s_job_t * jo, s_host_t * dhost, GKO_INT64 num, GKO_INT64 count,
@@ -185,8 +209,10 @@ GKO_INT64 get_blocks_c(s_job_t * jo, s_host_t * dhost, GKO_INT64 num, GKO_INT64 
     GKO_INT64 blk_got;
     GKO_INT64 j;
     GKO_INT64 ret;
+    int msg_len;
     ssize_t counter;
     int rcv_have_time = RCVHAVE_TIMEOUT;
+    char * buf_zip = NULL;
     char msg[MSG_LEN] = {'\0'};
     char * arg_array[4];
     GKO_INT64 n_to_recv;
@@ -199,7 +225,7 @@ GKO_INT64 get_blocks_c(s_job_t * jo, s_host_t * dhost, GKO_INT64 num, GKO_INT64 
         snprintf(msg, MSG_LEN, "DEAD\t%s\t%s\t%u", jo->uri, dhost->addr,
                 dhost->port);
         gko_log(NOTICE, "telling server %s", msg);
-        if (FAIL_CHECK(sendcmd(&gko.the_serv, msg, RCV_TIMEOUT, SND_TIMEOUT)))
+        if (FAIL_CHECK(sendcmd2host(&gko.the_serv, msg, RCV_TIMEOUT, SND_TIMEOUT)))
         {
             gko_log(WARNING, "sendcmd host_down_cmd failed");
         }
@@ -239,11 +265,22 @@ GKO_INT64 get_blocks_c(s_job_t * jo, s_host_t * dhost, GKO_INT64 num, GKO_INT64 
     /**
      * send "GETT uri start num" to server
      **/
-    snprintf(msg, MSG_LEN, "GETT\t%s\t%lld\t%lld", g_job.uri, num, count);
-    gko_log(DEBUG, "%s", msg);
-    if (FAIL_CHECK((j = sendall(sock, msg, MSG_LEN, SND_TIMEOUT)) < 0))
+    memset(msg, 0, sizeof(msg));
+    msg_len = snprintf(msg, MSG_LEN, "%sGETT\t%s\t%lld\t%lld", PREFIX_CMD, g_job.uri, num, count);
+    if (msg_len <= CMD_PREFIX_BYTE)
     {
-        gko_log(WARNING, "sending '%s' to %s:%u error %!", msg, dhost->addr, dhost->port, j);
+        gko_log(WARNING, FLF("snprintf error"));
+        ret = -1;
+        goto GET_BLKS_C_CLOSE_SOCK;
+    }
+    else
+    {
+        fill_cmd_head(msg, msg_len);
+    }
+    gko_log(DEBUG, "send %s:%u %s", dhost->addr, dhost->port, msg+CMD_PREFIX_BYTE);
+    if (FAIL_CHECK((j = sendall(sock, msg, msg_len, SND_TIMEOUT)) < 0))
+    {
+        gko_log(WARNING, "sending '%s' to %s:%u error %!", msg+CMD_PREFIX_BYTE, dhost->addr, dhost->port, j);
         ret = -1;
         goto GET_BLKS_C_CLOSE_SOCK;
     }
@@ -254,13 +291,14 @@ GKO_INT64 get_blocks_c(s_job_t * jo, s_host_t * dhost, GKO_INT64 num, GKO_INT64 
     {
         rcv_have_time = RCVSERV_HAVE_TIMEOUT;
     }
-    if (readall(sock, msg, sizeof(msg), rcv_have_time) < 0)
+    memset(msg, 0, sizeof(msg));
+    if (readcmd(sock, msg, sizeof(msg), rcv_have_time) < 0)
     {
-        gko_log(WARNING, "read HAVE failed", msg);
+        gko_log(WARNING, "read HAVE failed");
         ret = -1;
         goto GET_BLKS_C_CLOSE_SOCK;
     }
-    gko_log(DEBUG, "%s", msg);
+    gko_log(DEBUG, "read %s:%u %s", dhost->addr, dhost->port, msg);
     if (FAIL_CHECK(sep_arg(msg, arg_array, 2) != 2))
     {
         gko_log(WARNING, "Wrong HAVE cmd: %s", msg);
@@ -272,10 +310,12 @@ GKO_INT64 get_blocks_c(s_job_t * jo, s_host_t * dhost, GKO_INT64 num, GKO_INT64 
      * readall data and check the digest
      **/
     s_block_t * b;
+    buf_zip = new char [BLOCK_SIZE + BLOCK_SIZE * 6 / 1024 + CMD_PREFIX_BYTE];
     for (blk_got = 0; blk_got < n_to_recv; blk_got++)
     {
         b = g_job.blocks + (num + blk_got) % g_job.block_count;
-        counter = readall(sock, buf, b->size, RCVBLK_TIMEOUT);
+        counter = readall_unzip(sock, buf, buf_zip, b->size, RCVBLK_TIMEOUT);
+//        counter = readall(sock, buf, b->size, RCVBLK_TIMEOUT);
         if (FAIL_CHECK(counter != b->size))
         {
             gko_log(WARNING, "not readall all, read %ld", counter);
@@ -306,6 +346,10 @@ GKO_INT64 get_blocks_c(s_job_t * jo, s_host_t * dhost, GKO_INT64 num, GKO_INT64 
     ret = blk_got;
 
 GET_BLKS_C_CLOSE_SOCK:
+    if (buf_zip)
+    {
+        delete [] buf_zip;
+    }
     close_socket(sock);
     return ret;
 }
@@ -315,7 +359,7 @@ GET_BLKS_C_CLOSE_SOCK:
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int helo_serv_c(void * arg, int fd, s_host_t * server)
@@ -325,7 +369,9 @@ int helo_serv_c(void * arg, int fd, s_host_t * server)
     int select_ret;
     int res;
     socklen_t res_size = sizeof res;
-    char msg[2] = {'\0'}; ///for readall HI, must not larger than 2
+    char msg[SHORT_MSG_LEN] = {'\0'}; ///for readall HI, must not larger than 2
+    char helo_msg[SHORT_MSG_LEN] = {'\0'};
+    int msg_len;
     struct sockaddr_in channel;
     struct sockaddr addr;///source addr
     struct timeval recv_timeout;
@@ -447,14 +493,25 @@ int helo_serv_c(void * arg, int fd, s_host_t * server)
 
     ///get the sockaddr and port
     /// say HELO expect HI
-    if (FAIL_CHECK(sendall(sock, "HELO", 4, SNDHELO_TIMEOUT) < 0))
+    msg_len = snprintf(helo_msg, sizeof(helo_msg), "%sHELO", PREFIX_CMD);
+    if (msg_len <= CMD_PREFIX_BYTE)
+    {
+        gko_log(WARNING, FLF("snprintf error"));
+        ret = -1;
+        goto HELO_SERV_C_CLOSE_SOCK;
+    }
+    else
+    {
+        fill_cmd_head(helo_msg, msg_len);
+    }
+
+    if (FAIL_CHECK(sendall(sock, helo_msg, msg_len, SNDHELO_TIMEOUT) < 0))
     {
         gko_log(WARNING, "sendall HELO error");
         ret = -1;
         goto HELO_SERV_C_CLOSE_SOCK;
-
     }
-    if (readall(sock, msg, sizeof(msg), RCVHI_TIMEOUT) < 0)
+    if (readcmd(sock, msg, sizeof(msg), RCVHI_TIMEOUT) < 0)
     {
         gko_log(WARNING, "read HI from serv failed");
         ret = -1;
@@ -470,8 +527,8 @@ int helo_serv_c(void * arg, int fd, s_host_t * server)
      * get the public ip addr
      **/
     memcpy(&seed_addr, &addr, sizeof(seed_addr));
-    strncpy(gko.the_clnt.addr, inet_ntoa(seed_addr.sin_addr), IP_LEN);
-    ///gko.the_clnt.port = ntohs(seed_addr.sin_port);
+    strncpy(gko_pool::gko_serv.addr, inet_ntoa(seed_addr.sin_addr), IP_LEN);
+    ///gko_pool::gko_serv.port = ntohs(seed_addr.sin_port);
     gko_log(NOTICE, "source: %s:%d", inet_ntoa(seed_addr.sin_addr),
             ntohs(seed_addr.sin_port));
     ret = 0;
@@ -486,7 +543,7 @@ HELO_SERV_C_CLOSE_SOCK:
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 //static int broadcast_join(s_host_t * host_array, s_host_t *h)
@@ -497,7 +554,7 @@ HELO_SERV_C_CLOSE_SOCK:
 //    snprintf(buf, SHORT_MSG_LEN, "NEWW\t%s\t%d", h->addr, h->port);
 //    while (p_h->port)
 //    {
-//        sendcmd(p_h, buf, 2, 2);
+//        sendcmd2host(p_h, buf, 2, 2);
 //        p_h++;
 //    }
 //    return 0;
@@ -508,23 +565,36 @@ HELO_SERV_C_CLOSE_SOCK:
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 void * join_job_c(void * arg, int fd)
 {
     char msg[MSG_LEN] = {'\0'};
-    int sock;
+    int msg_len;
+    int sock = -1;
     int j;
     int retry = 0;
     void * ret;
     char * client_local_path = NULL;
     GKO_INT64 percent = 0;
     s_host_t * host_buf = NULL;
-    unsigned hkey = xor_hash(&gko.the_clnt, sizeof(gko.the_clnt), 0);
+    unsigned hkey = xor_hash(&gko_pool::gko_serv,
+            sizeof(gko_pool::gko_serv), 0);
 
-    snprintf(msg, MAX_URI, "JOIN\t%s\t%s\t%d", g_job.uri, gko.the_clnt.addr,
-            gko.the_clnt.port);
+    msg_len = snprintf(msg, sizeof(msg), "%sJOIN\t%s\t%s\t%d", PREFIX_CMD, g_job.uri,
+            gko_pool::gko_serv.addr,
+            gko_pool::gko_serv.port);
+    if (msg_len <= CMD_PREFIX_BYTE)
+    {
+        gko_log(WARNING, FLF("snprintf error"));
+        ret = (void *) -1;
+        goto JOIN_JOB_C_CLOSE_SOCK;
+    }
+    else
+    {
+        fill_cmd_head(msg, msg_len);
+    }
 
     do
     {
@@ -539,25 +609,19 @@ void * join_job_c(void * arg, int fd)
         {
             gko_log(WARNING, "connect_host error");
             retry ++;
+            sleep(JOIN_RETRY_INTERVAL * retry);
             continue;
         }
-        else
-        {
-            retry = 0;
-        }
 
-        if (sendall(sock, msg, MSG_LEN, SND_TIMEOUT) < 0)
+        if (sendall(sock, msg, msg_len, SND_TIMEOUT) < 0)
         {
             gko_log(WARNING, "sending JOIN error!");
             retry ++;
+            sleep(JOIN_RETRY_INTERVAL * retry);
             close_socket(sock);
             continue;
         }
-        else
-        {
-            retry = 0;
-        }
-        gko_log(DEBUG, "%s", msg);
+        gko_log(DEBUG, "%s", msg+CMD_PREFIX_BYTE);
 
         /**
          * readall the hash progress info until it's 100
@@ -567,6 +631,7 @@ void * join_job_c(void * arg, int fd)
         {
             gko_log(WARNING, "readall progress error!");
             retry ++;
+            sleep(JOIN_RETRY_INTERVAL * retry);
             close_socket(sock);
             continue;
         }
@@ -579,7 +644,7 @@ void * join_job_c(void * arg, int fd)
         if (percent != 100)
         {
             close_socket(sock);
-            usleep((hkey % 8) * 1000000 + 2000000);
+            usleep((hkey % 10) * 1000000 + 2000000);
         }
     } while (percent != 100);
 
@@ -645,7 +710,7 @@ void * join_job_c(void * arg, int fd)
             goto JOIN_JOB_C_CLOSE_SOCK;
         }
         memset(g_job.files, 0, g_job.files_size);
-        j = readall(sock, g_job.files, g_job.files_size, RCVBLK_TIMEOUT);
+        j = readall(sock, g_job.files, g_job.files_size, RCVJOB_TIMEOUT);
         if (j < 0)
         {
             gko_log(FATAL, "read g_job.files from server failed");
@@ -672,7 +737,7 @@ void * join_job_c(void * arg, int fd)
             goto JOIN_JOB_C_CLOSE_SOCK;
         }
         memset(g_job.blocks, 0, g_job.blocks_size);
-        j = readall(sock, g_job.blocks, g_job.blocks_size, RCVBLK_TIMEOUT);
+        j = readall(sock, g_job.blocks, g_job.blocks_size, RCVJOB_TIMEOUT);
         if (j < 0)
         {
             gko_log(FATAL, "read g_job.blocks from server failed");
@@ -696,7 +761,7 @@ void * join_job_c(void * arg, int fd)
             goto JOIN_JOB_C_CLOSE_SOCK;
         }
         memset(host_buf, 0, sizeof(s_host_t)*(g_job.host_num + 1));
-        j = readall(sock, host_buf, g_job.host_num * sizeof(s_host_t), RCVBLK_TIMEOUT);
+        j = readall(sock, host_buf, g_job.host_num * sizeof(s_host_t), RCVJOB_TIMEOUT);
         if (j < 0)
         {
             gko_log(FATAL, "read host list from server failed");
@@ -709,13 +774,14 @@ void * join_job_c(void * arg, int fd)
         g_job.host_set = new std::set<s_host_t> ;
         pthread_mutex_lock(&g_clnt_lock);
         (*(g_job.host_set)).insert(host_buf, host_buf + g_job.host_num);
+        update_host_max(&g_job);
         pthread_mutex_unlock(&g_clnt_lock);
     }
 
     {
         /// put the known host in the hash ring
         pthread_mutex_lock(&g_clnt_lock);
-        for (std::set<s_host_t>::iterator i = (*(g_job.host_set)).begin(); i
+        for (std::set<s_host_t>::const_iterator i = (*(g_job.host_set)).begin(); i
                 != (*(g_job.host_set)).end(); i++)
         {
             gko_log(NOTICE, "host in set:%s %d", i->addr, i->port);
@@ -733,7 +799,7 @@ void * join_job_c(void * arg, int fd)
             {
                 if ((g_job.blocks + j)->host_set)
                 {
-                    for (std::set<s_host_t>::iterator it =
+                    for (std::set<s_host_t>::const_iterator it =
                         (*((g_job.blocks + j)->host_set)).begin(); it
                             != (*((g_job.blocks + j)->host_set)).end(); it++)
                     {
@@ -766,10 +832,10 @@ JOIN_JOB_C_CLOSE_SOCK:
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-int quit_job_c(s_host_t * quit_host, s_host_t * server, char * uri)
+int quit_job_c(const s_host_t * quit_host, const s_host_t * server, const char * uri)
 {
     char msg[MSG_LEN] = {'\0'};
     /**
@@ -778,7 +844,7 @@ int quit_job_c(s_host_t * quit_host, s_host_t * server, char * uri)
     snprintf(msg, MSG_LEN, "QUIT\t%s\t%s\t%d", g_job.uri, quit_host->addr,
             quit_host->port);
     gko_log(NOTICE, "quiting : '%s'", msg);
-    if(sendcmd(server, msg, 2, 2) < 0)
+    if(sendcmd2host(server, msg, 2, 4) < 0)
     {
         gko_log(NOTICE, "sending quit message failed");
     }

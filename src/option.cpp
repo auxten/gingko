@@ -20,6 +20,9 @@
 #include "path.h"
 #include "log.h"
 
+#if !defined(INADDR_ANY)
+#define	INADDR_ANY		(u_int32_t)0x00000000
+#endif
 extern s_gingko_global_t gko;
 
 /**
@@ -27,12 +30,12 @@ extern s_gingko_global_t gko;
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-void clnt_show_version()
+GKO_STATIC_FUNC void clnt_show_version()
 {
-    printf("gingko_clnt %s\nBuilt: %s %s\n", GKO_VERSION, __DATE__, __TIME__);
+    printf("gkocp %s\nBuilt: %s %s\n", GKO_VERSION, __DATE__, __TIME__);
     return;
 }
 
@@ -41,12 +44,12 @@ void clnt_show_version()
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-void serv_show_version()
+GKO_STATIC_FUNC void serv_show_version()
 {
-    printf("gingko_serv %s\nBuilt: %s %s\n", GKO_VERSION, __DATE__, __TIME__);
+    printf("gkod %s\nBuilt: %s %s\n", GKO_VERSION, __DATE__, __TIME__);
     return;
 }
 
@@ -55,23 +58,23 @@ void serv_show_version()
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-void clnt_show_help()
+GKO_STATIC_FUNC void clnt_show_help()
 {
     printf(
             "\n\
 NAME\n\
-     gingko_clnt -- p2p copy (remote dir copy program with p2p transfer support)\n\
+     gkocp -- p2p copy (remote dir copy program with p2p transfer support)\n\
 \n\
 SYNOPSIS\n\
-     gingko_clnt [options] host1:dir1 dir2\n\
+     gkocp [options] host1:dir1 dir2\n\
 \n\
 DESCRIPTION\n\
-     gingko_clnt copies dir1 from gingko_serv to local dir2. It uses p2p for data transfer.\n\
+     gkocp copies dir1 from gkod to local dir2. It uses p2p for data transfer.\n\
 \n\
-     I tried my best to make it compatible with scp in usage, gingko_clnt will preserve \n\
+     I tried my best to make it compatible with scp in usage, gkocp will preserve \n\
      the 'rwx' attributes. The recursive mode is default on.\n\
 \n\
      BUT NOTICE that:\n\
@@ -95,11 +98,19 @@ DESCRIPTION\n\
 \n\
      -u upload_limit_num\n\
      --uplimit=upload_limit_num\n\
-         Limit the upload bandwidth to limit_num MB/s. default is %d MB/s\n\
+         Limit the upload bandwidth to upload_limit_num MB/s. default is %d MB/s\n\
 \n\
      -d download_limit_num\n\
      --downlimit=download_limit_num\n\
-         Limit the download bandwith to limit_num MB/s. default is %d MB/s\n\
+         Limit the download bandwith to download_limit_num MB/s. default is %d MB/s\n\
+\n\
+     -r limit_num\n\
+     --diskread=limit_num\n\
+         Limit the disk read rate to limit_num MB/s. default is (upload_limit_num * %d) MB/s\n\
+\n\
+     -w limit_num\n\
+     --diskwrite=limit_num\n\
+         Limit the disk write rate to limit_num MB/s. default is (download_limit_num * %d) MB/s\n\
 \n\
      -t worker_thread_num\n\
      --workerthread=worker_thread_num\n\
@@ -111,19 +122,20 @@ DESCRIPTION\n\
 \n\
      -s seed_time\n\
      --seedtime=seed_time_num\n\
-         After downloading continue seed time. default is %d seconds\n\
+         After downloading is finished, client will continue to uploading for seed_time(s).\
+         Default is decided by download time used and alive host count, and max seed_time is 10min.\n\
 \n\
      -b hostname\n\
      --bind=hostname\n\
-         Bind IP, default is 0.0.0.0.\n\
+         Bind IP, default is 0.0.0.0\n\
 \n\
      -p portnum\n\
      --port=portnum\n\
-         Port to connect the server. default is %d \n\
+         Port of server to be connected. default is %d\n\
 \n\
      -l logpath\n\
      --log=logpath\n\
-         Path for log file. default is %s\n\
+         Path for log file. default is %s. We recommond specify a path to file\n\
 \n\
      -v\n\
      --version\n\
@@ -137,16 +149,17 @@ EXAMPLES\n\
      /path/to/data_dest_dir, the upload bandwidth and download bandwidth is limited to 10MB/s and\n\
      the continue transfer is also enabled.\n\
 \n\
-     gingko_clnt -u 10 -d 10 -c yf-cm-gingko00.yf01:/path/to/data_src_dir /path/to/data_dest_dir\n\
+     gkocp -u 10 -d 10 -c yf-cm-gingko00.yf01:/path/to/data_src_dir /path/to/data_dest_dir\n\
 \n\
 AUTHORS\n\
-     Wang Pengcheng <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>\n\
+     <auxtenwpc@gmail.com>\n\
 ",
             CLNT_LIMIT_UP_RATE / 1024 / 1024,
             CLNT_LIMIT_DOWN_RATE / 1024 / 1024,
+            CLNT_DISK_READ_RATIO,
+            CLNT_DISK_WRITE_RATIO,
             CLNT_ASYNC_THREAD_NUM,
             CLNT_POOL_SIZE,
-            SEED_TIME,
             SERV_PORT,
             CLIENT_LOG);
 }
@@ -156,21 +169,21 @@ AUTHORS\n\
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-void serv_show_help()
+GKO_STATIC_FUNC void serv_show_help()
 {
     printf(
             "\n\
 NAME\n\
-     gingko_serv -- p2p copy server side (remote dir copy program with p2p transfer support)\n\
+     gkod -- p2p copy server side (remote dir copy program with p2p transfer support)\n\
 \n\
 SYNOPSIS\n\
-     gingko_serv [options]\n\
+     gkod [options]\n\
 \n\
 DESCRIPTION\n\
-     gingko_serv is the server side of gingko. It uses p2p for data transfer.\n\
+     gkod is the server side of gingko. It uses p2p for data transfer.\n\
 \n\
      The options are as follows: (LONG OPTIONS is recommonded)\n\
 \n\
@@ -178,9 +191,17 @@ DESCRIPTION\n\
      --help\n\
          Show this help message.\n\
 \n\
+     -d\n\
+     --daemon\n\
+         run server in daemon mode, default is disable.\n\
+\n\
      -u upload_limit_num\n\
      --uplimit=upload_limit_num\n\
-         Limit the upload bandwidth to limit_num MB/s. default is %d MB/s\n\
+         Limit the upload bandwidth to upload_limit_num MB/s. default is %d MB/s\n\
+\n\
+     -r limit_num\n\
+     --diskread=limit_num\n\
+         Limit the disk read rate to limit_num MB/s. default is (upload_limit_num * %d) MB/s\n\
 \n\
      -t worker_thread_num\n\
      --connlimit=worker_thread_num\n\
@@ -215,9 +236,10 @@ DESCRIPTION\n\
 \n\
 \n\
 AUTHORS\n\
-     Wang Pengcheng <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>\n\
+     <auxtenwpc@gmail.com>\n\
 ",
             SERV_LIMIT_UP_RATE / 1024 / 1024,
+            SERV_DISK_READ_RATIO,
             SERV_ASYNC_THREAD_NUM,
             SERV_POOL_SIZE,
             SERV_PORT,
@@ -229,7 +251,7 @@ AUTHORS\n\
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int clnt_parse_opt(int argc, char *argv[], s_job_t * jo)
@@ -242,6 +264,8 @@ int clnt_parse_opt(int argc, char *argv[], s_job_t * jo)
             { "progress", no_argument, 0, 'o' },
             { "uplimit", required_argument, 0, 'u' },
             { "downlimit", required_argument, 0, 'd' },
+            { "diskread", required_argument, 0, 'r' },
+            { "diskwrite", required_argument, 0, 'w' },
             { "workerthread", required_argument, 0, 't' },
             { "connlimit", required_argument, 0, 'n' },
             { "seedtime", required_argument, 0, 's' },
@@ -257,19 +281,23 @@ int clnt_parse_opt(int argc, char *argv[], s_job_t * jo)
      **/
     gko.opt.limit_up_rate = CLNT_LIMIT_UP_RATE;
     gko.opt.limit_down_rate = CLNT_LIMIT_DOWN_RATE;
+    gko.opt.limit_disk_r_rate = CLNT_LIMIT_UP_RATE * CLNT_DISK_READ_RATIO;
+    gko.opt.limit_disk_w_rate = CLNT_LIMIT_DOWN_RATE * CLNT_DISK_WRITE_RATIO;
     gko.opt.worker_thread = CLNT_ASYNC_THREAD_NUM;
     gko.opt.connlimit = CLNT_POOL_SIZE;
-    gko.opt.seed_time = SEED_TIME;
+    gko.opt.seed_time = -1;
     gko.opt.bind_ip = htons(INADDR_ANY);
     gko.the_serv.port = SERV_PORT;
     strncpy(gko.opt.logpath, CLIENT_LOG, sizeof(gko.opt.logpath));
 
+    char is_disk_r_set = 0;
+    char is_disk_w_set = 0;
     /** process args **/
     while (1)
     {
         int option_index = 0;
 
-        int c = getopt_long(argc, argv, "chou:d:t:n:s:b:p:l:v", long_options,
+        int c = getopt_long(argc, argv, "chou:d:r:w:t:n:s:b:p:l:v", long_options,
                 &option_index);
         if (c == -1)
         {
@@ -319,6 +347,32 @@ int clnt_parse_opt(int argc, char *argv[], s_job_t * jo)
                 fprintf(stderr, "gko.opt.limit_down_rate: %d\n", gko.opt.limit_down_rate);
                 break;
 
+            case 'r':/** disk read **/
+                gko.opt.limit_disk_r_rate = strtoimax(optarg, NULL, 10) * 1024 * 1024;
+                if (gko.opt.limit_disk_r_rate <= 0 || gko.opt.limit_disk_r_rate > 2000
+                        * 1024 * 1024)
+                {
+                    fprintf(stderr, "Invalid disk read limit num: %d\n",
+                            gko.opt.limit_disk_r_rate);
+                    exit(1);
+                }
+                is_disk_r_set = 1;
+                fprintf(stderr, "gko.opt.limit_disk_r_rate: %d\n", gko.opt.limit_disk_r_rate);
+                break;
+
+            case 'w':/** disk write **/
+                gko.opt.limit_disk_w_rate = strtoimax(optarg, NULL, 10) * 1024 * 1024;
+                if (gko.opt.limit_disk_w_rate <= 0 || gko.opt.limit_disk_w_rate > 2000
+                        * 1024 * 1024)
+                {
+                    fprintf(stderr, "Invalid disk write limit num: %d\n",
+                            gko.opt.limit_disk_w_rate);
+                    exit(1);
+                }
+                is_disk_w_set = 1;
+                fprintf(stderr, "gko.opt.limit_disk_w_rate: %d\n", gko.opt.limit_disk_w_rate);
+                break;
+
             case 't':/** worker_thread **/
                 gko.opt.worker_thread = strtoimax(optarg, NULL, 10);
                 if (gko.opt.worker_thread < 1 || gko.opt.worker_thread > 2047
@@ -343,7 +397,7 @@ int clnt_parse_opt(int argc, char *argv[], s_job_t * jo)
 
             case 's':/** seedtime **/
                 gko.opt.seed_time = strtoimax(optarg, NULL, 10);
-                if (gko.opt.seed_time < 1 || gko.opt.seed_time > 2047
+                if (gko.opt.seed_time < 0 || gko.opt.seed_time > 2047
                         * 1024 * 1024)
                 {
                     fprintf(stderr, "Invalid seed_time num: %d\n",
@@ -392,6 +446,28 @@ int clnt_parse_opt(int argc, char *argv[], s_job_t * jo)
         }
     }
 
+    if (! is_disk_r_set)
+    {
+        if (gko.opt.limit_up_rate > 2000 * 1024 * 1024 / CLNT_DISK_READ_RATIO)
+        {
+            gko.opt.limit_disk_r_rate = 2000 * 1024 * 1024;
+        }
+        else
+        {
+            gko.opt.limit_disk_r_rate = gko.opt.limit_up_rate * CLNT_DISK_READ_RATIO;
+        }
+    }
+    if (! is_disk_w_set)
+    {
+        if (gko.opt.limit_down_rate > 2000 * 1024 * 1024 / CLNT_DISK_WRITE_RATIO)
+        {
+            gko.opt.limit_disk_w_rate = 2000 * 1024 * 1024;
+        }
+        else
+        {
+            gko.opt.limit_disk_w_rate = gko.opt.limit_down_rate * CLNT_DISK_WRITE_RATIO;
+        }
+    }
     /**
      * process the extra 2 args: source and destination
      **/
@@ -454,7 +530,7 @@ int clnt_parse_opt(int argc, char *argv[], s_job_t * jo)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int serv_parse_opt(int argc, char *argv[])
@@ -463,22 +539,28 @@ int serv_parse_opt(int argc, char *argv[])
     struct option long_options[] =
         {
             { "help", no_argument, 0, 'h' },
+            { "daemon", no_argument, 0, 'd'},
             { "uplimit", required_argument, 0, 'u' },
+            { "diskread", required_argument, 0, 'r' },
             { "bind", required_argument, 0, 'b' },
             { "port", required_argument, 0, 'p' },
             { "log", required_argument, 0, 'l' },
             { "worker_thread", required_argument, 0, 't' },
             { "connlimit", required_argument, 0, 'n' },
-//            { "seedspeed", required_argument, 0, 'e' },
+            //TODO(liuxiaohui): limit speed of generate seed
+            { "seedspeed", required_argument, 0, 'e' },
             { "version", no_argument, 0, 'v' },
             { "debug", no_argument, &gko.opt.to_debug, 1 },
             { 0, 0, 0, 0 } };
 
+    //default run in front-end
+    gko.opt.daemon_mode = 0;
     /**
      * set default up down rate limit
      **/
     gko.opt.limit_up_rate = SERV_LIMIT_UP_RATE;
     gko.opt.limit_down_rate = 0; /// means no limit
+    gko.opt.limit_disk_r_rate = SERV_LIMIT_UP_RATE * SERV_DISK_READ_RATIO;
     gko.opt.limit_mk_seed_rate = LIMIT_MK_SEED_RATE;
     gko.opt.port = SERV_PORT;
     gko.opt.worker_thread = SERV_ASYNC_THREAD_NUM;
@@ -486,12 +568,13 @@ int serv_parse_opt(int argc, char *argv[])
     gko.opt.bind_ip = htons(INADDR_ANY);
     strncpy(gko.opt.logpath, SERVER_LOG, sizeof(gko.opt.logpath));
 
+    char is_disk_r_set = 0;
     /** process args **/
     while (1)
     {
         int option_index = 0;
 
-        int c = getopt_long(argc, argv, "hu:b:p:l:t:n:e:v", long_options,
+        int c = getopt_long(argc, argv, "hdu:r:b:p:l:t:n:e:v", long_options,
                 &option_index);
         if (c == -1)
         {
@@ -508,7 +591,9 @@ int serv_parse_opt(int argc, char *argv[])
                 serv_show_help();
                 exit(0);
                 break;
-
+            case 'd':
+                gko.opt.daemon_mode = 1;
+                break;
             case 'u':/** uplimit **/
                 gko.opt.limit_up_rate = strtoimax(optarg, NULL, 10) * 1024 * 1024;
                 if (gko.opt.limit_up_rate <= 0 || gko.opt.limit_up_rate > 2047 * 1024
@@ -519,6 +604,19 @@ int serv_parse_opt(int argc, char *argv[])
                     exit(1);
                 }
                 fprintf(stderr, "gko.opt.limit_up_rate: %d\n", gko.opt.limit_up_rate);
+                break;
+
+            case 'r': /** disk read **/
+                gko.opt.limit_disk_r_rate = strtoimax(optarg, NULL, 10) * 1024 * 1024;
+                if (gko.opt.limit_disk_r_rate <= 0 || gko.opt.limit_disk_r_rate > 2000
+                        * 1024 * 1024)
+                {
+                    fprintf(stderr, "Invalid disk read limit num: %d\n",
+                            gko.opt.limit_disk_r_rate);
+                    exit(1);
+                }
+                is_disk_r_set = 1;
+                fprintf(stderr, "gko.opt.limit_disk_r_rate: %d\n", gko.opt.limit_disk_r_rate);
                 break;
 
             case 'b':/** bind ip **/

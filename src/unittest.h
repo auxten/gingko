@@ -19,8 +19,6 @@ int thread_list_find_next();
 void * vnode_download(void * arg);
 int node_download(void *);
 void * downloadworker(void *);
-inline void pthread_init();
-inline void pthread_clean();
 void clnt_int_handler(const int sig);
 void * clnt_int_worker(void * a);
 int gingko_clnt_global_init(int argc, char *argv[]);
@@ -46,7 +44,7 @@ int init_seed(s_job_t * jo);
 
 ///serv_main.cpp (6 matches)
 int init_daemon(void);
-inline void pthread_init();
+inline int pthread_init();
 inline void pthread_clean();
 void serv_int_handler(const int sig);
 void * serv_int_worker(void * a);
@@ -54,6 +52,13 @@ int gingko_serv_global_init(int argc, char *argv[]);
 
 ///path.cpp
 char * cwd_path_to_abs_path(char * abs_path, const char * oldpath);
+
+
+///option.cpp
+void clnt_show_version();
+void serv_show_version();
+void clnt_show_help();
+void serv_show_help();
 
 #endif /* UNITTEST */
 

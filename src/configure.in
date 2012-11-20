@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([1.68])
-AC_INIT([libxor_hash.a,gingko_serv,gingko_clnt,unittest], [3.14], [blog.auxten.com])
+AC_INIT([libxor_hash.a,gingko_serv,gingko_clnt,unittest], [3.14], [blog.optool.net])
 AC_CONFIG_SRCDIR([config.h.in])
 AM_CONFIG_HEADER([config.h])
 #AC_CONFIG_HEADERS([config.h])

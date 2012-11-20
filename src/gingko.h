@@ -34,11 +34,18 @@
 #include <set>
 #include <vector>
 #include <pthread.h>
+#include <netinet/in.h>
 
-#ifdef __APPLE__
+#if defined (__APPLE__)
 #include <sys/uio.h>
-#else
+#elif defined (__FreeBSD__)
+#include <sys/uio.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#elif defined(__linux__)
 #include <sys/sendfile.h>
+#include <linux/unistd.h>
+#include <sys/syscall.h>
 #endif /** __APPLE__ **/
 
 #include "event.h"
@@ -53,24 +60,43 @@
 #define                 _FILE_OFFSET_BITS       64
 /// only 8 or 4 here
 #define                 HASH_BYTE_NUM_ONCE      8
+#define                 CMD_PREFIX_BYTE         16
+#if CMD_PREFIX_BYTE == 16
+#define                 PREFIX_CMD              "                "
+#endif
+
+/// cmd keyword len
+#define                 CMD_LEN                 8
 
 typedef unsigned long long      GKO_UINT64;
 typedef long long               GKO_INT64;
 typedef const char * const      GKO_CONST_STR;
 
+#if defined (_GKO_VERSION)
+static GKO_CONST_STR    GKO_VERSION =           _GKO_VERSION;
+#else
+static GKO_CONST_STR    GKO_VERSION =           "unknown";
+#endif
+/// protocol version
+static const short      PROTO_VER   =           0;
+/// root uid
 static const uid_t      ROOT =                  0;
 /// block size in bytes
-static const int        BLOCK_SIZE =            (5 * 1024 * 1024);
+static const int        BLOCK_SIZE =            (2 * 1024 * 1024);
+/// uncompress extra bytes
+static const int        UNZIP_EXTRA =           32;// 8 is enough
 /// req at max MAX_REQ_SERV_BLOCKS from serv
-static const int        MAX_REQ_SERV_BLOCKS =   10;
-/// req at max MAX_REQ_SERV_BLOCKS from serv
-static const int        MAX_REQ_CLNT_BLOCKS =   10;
+static const int        MAX_REQ_SERV_BLOCKS =   5;
+/// req at max MAX_REQ_CLNT_BLOCKS from clnt
+static const int        MAX_REQ_CLNT_BLOCKS =   300;
 /// just like ZERO :p
 static const int        SERV_PORT =             2120;
+/// indicate random port
+static const int        RANDOM_PORT =           -1;
 /// tcp buffer size
 static const int        TCP_BUF_SZ =            262144;
 /// request queue length
-static const int        REQ_QUE_LEN =           SOMAXCONN;
+static const int        REQ_QUE_LEN =           100;
 /// host name length in max
 static const int        MAX_HOST_NAME =         255;
 /// MAXPATHLEN in linux is 4096!!!,is it too long?
@@ -88,7 +114,7 @@ static const int        MAX_JOBS =              1024;
 /// max log line count to reopen log file, in case of file mv
 static const GKO_INT64  MAX_LOG_REOPEN_LINE =   10;
 /// max log line count
-static const GKO_INT64  MAX_LOG_LINE =          (100000 * MAX_LOG_REOPEN_LINE);
+static const GKO_INT64  MAX_LOG_LINE =          (1000000 * MAX_LOG_REOPEN_LINE);
 /// max length of a uri
 static const int        MAX_URI =               MAX_PATH_LEN;
 /// nftw depth this sames have no effect....whatever 100 is enough
@@ -96,73 +122,91 @@ static const int        MAX_SCAN_DIR_FD =       5;
 ///((1LL<<sizeof(GKO_INT64)*8-1)-1);
 static const GKO_INT64  MAX_INT64 =             9223372036854775807LL;
 /// retry 3 times then fail
-static const int        MAX_DOWN_RETRY =        45;
+static const int        MAX_DOWN_RETRY =        40;
+/// retry 3 times then fail
+static const int        SUCC_RETRY_DIV =        2;
 /// retry 3 times then fail
 static const int        MAX_JOIN_RETRY =        3;
 /// retry 3 times then fail
-static const int        MAX_HELO_RETRY =        3;
+static const int        MAX_HELO_RETRY =        2;
 /// min value of ulimit -n
 static const GKO_UINT64 MIN_NOFILE =            2000;
 /// bind port failed return
 static const int        BIND_FAIL =             -12;
 /// connect failed return
 static const int        HOST_DOWN_FAIL =        -13;
-/// bind port try interval, in microseconds
+/// hello retry interval, in seconds
+static const int        HELO_RETRY_INTERVAL =   3;
+/// join retry interval, in seconds
+static const int        JOIN_RETRY_INTERVAL =   3;
+/// bind port try interval, in useconds
 static const int        BIND_INTERVAL =         10000;
-/// gko.sig_flag check interval, in microseconds
+/// gko.sig_flag check interval, in useconds
 static const int        CK_SIG_INTERVAL =       200000;
 /// GKO_INT64 int char
 static const int        MAX_LONG_INT =          19;
 /// default at MacOS is 512k
 static const int        MYSTACKSIZE =           (10 * 1024 * 1024);
-/// when download is over seed time
-static const int        SEED_TIME =             60;
 /// default client conn limit
 static const int        CLNT_POOL_SIZE =        20;
 /// default client thread num
-static const int        CLNT_ASYNC_THREAD_NUM = 4;
+static const int        CLNT_ASYNC_THREAD_NUM = 3;
 /// default server conn limit
 static const int        SERV_POOL_SIZE =        30000;
 /// default client thread num
-static const int        SERV_ASYNC_THREAD_NUM = 12;
+static const int        SERV_ASYNC_THREAD_NUM = 16;
 /// default xor hash thread num
-static const int        XOR_HASH_TNUM =         2;
+static const int        XOR_HASH_TNUM =         3;
 /// host count got from hash ring
 static const int        FIRST_HOST_COUNT =      3;
 /// host count got from speed test
 static const int        SECOND_HOST_COUNT =     3;
+
 /// in seconds
-static const int        RCV_TIMEOUT =           10;
+static const int        RCV_TIMEOUT =           30;
 /// in seconds
-static const int        SND_TIMEOUT =           10;
+static const int        SND_TIMEOUT =           30;
 /// in seconds
-static const int        RCVHI_TIMEOUT =         120;
+static const int        RCVHI_TIMEOUT =         300;
 /// in seconds
-static const int        RCVJOB_TIMEOUT =        120;
+static const int        RCVJOB_TIMEOUT =        1000;
 /// in seconds
-static const int        RCVHAVE_TIMEOUT =       10;
+static const int        RCVHAVE_TIMEOUT =       30;
 /// in seconds
-static const int        RCVSERV_HAVE_TIMEOUT =  20;
+static const int        RCVSERV_HAVE_TIMEOUT =  1000;
 /// in seconds
-static const int        SNDSERV_HAVE_TIMEOUT =  20;
+static const int        SNDSERV_HAVE_TIMEOUT =  120;
 /// in seconds
-static const int        SNDHELO_TIMEOUT =       10;
+static const int        SNDHELO_TIMEOUT =       30;
 /// in seconds
-static const int        RCVBLK_TIMEOUT =        20;
+static const int        RCVBLK_TIMEOUT =        30;
 /// in seconds
-static const int        SNDBLK_TIMEOUT =        20;
+static const int        SNDBLK_TIMEOUT =        30;
 /// in seconds
-static const int        RCVPROGRESS_TIMEOUT =   60;
+static const int        RCVPROGRESS_TIMEOUT =   120;
+
 /// sleep time before free the job related mem
-static const int        ERASE_JOB_MEM_WAIT =    (SND_TIMEOUT + 5);
+static const int        ERASE_JOB_MEM_WAIT =    (5);
 ///bytes per second
-static const int        CLNT_LIMIT_UP_RATE =    (20 * 1024 * 1024);
+static const int        CLNT_LIMIT_UP_RATE =    (30 * 1024 * 1024);
 ///bytes per second
 static const int        CLNT_LIMIT_DOWN_RATE =  (20 * 1024 * 1024);
+///  (disk read rate) / (net upload rate)
+static const int        CLNT_DISK_READ_RATIO =  2;
+///  (disk write rate) / (net download rate)
+static const int        CLNT_DISK_WRITE_RATIO = 2;
 ///bytes per second
-static const int        SERV_LIMIT_UP_RATE =    (80 * 1024 * 1024);
+static const int        SERV_LIMIT_UP_RATE =    (95 * 1024 * 1024);
+///  (disk read rate) / (net upload rate)
+static const int        SERV_DISK_READ_RATIO =  20;
 ///bytes per second
 static const int        LIMIT_MK_SEED_RATE =    (200 * 1024 * 1024);
+/// download upload time ratio
+static const int        DOWN_UP_TIME_RATIO =    6;
+/// max auto seed time
+static const int        MAX_AUTO_SEED_TIME =    600;
+/// check seed timeout time, seconds
+static const int        SEED_CHECK_TIME =       (1 * 60 * 60);
 /// every physical node have VNODE_NUM vnodes
 static const int        VNODE_NUM =             3;
 /// to sizeof an extern array we must define it
@@ -178,13 +222,13 @@ static const int        CREATE_OPEN_FLAG =      (O_WRONLY | O_CREAT | O_NOCTTY);
 static const int        READ_OPEN_FLAG =        (O_RDONLY | O_NOCTTY);
 static const int        WRITE_OPEN_FLAG =       (O_WRONLY | O_NOCTTY);
 
-static const int        MSG_LEN =               (MAX_URI + IP_LEN + 32 + MAX_LONG_INT * 2);
+static const int        MSG_LEN =               (MAX_URI + IP_LEN + 32 + MAX_LONG_INT * 2 + CMD_PREFIX_BYTE);
 static const int        CLNT_READ_BUFFER_SIZE = (MSG_LEN + 10);
 /// limit read rate when read msg larger than this
 static const int        READ_LIMIT_THRESHOLD =  (MSG_LEN + 5);
 
 ///"NEWW 255.255.255.255 65535"
-static const int        SHORT_MSG_LEN =         (4 + 1 + IP_LEN + 1 + 5 + 1);
+static const int        SHORT_MSG_LEN =         (4 + 1 + IP_LEN + 1 + 5 + 1 + CMD_PREFIX_BYTE);
 /// 10s
 static const int        SERV_TRANS_TIME_PLUS =  10000000;
 static const int        JOIN_ERR =              1;
@@ -192,9 +236,8 @@ static const int        MK_DIR_SYMLINK_ERR =    2;
 static const int        DOWNLOAD_ERR =          3;
 
 
-static GKO_CONST_STR     GKO_VERSION =          "1.0.1.0";
-static GKO_CONST_STR     SERVER_LOG =           "/dev/stdout";
-static GKO_CONST_STR     CLIENT_LOG =           "/dev/stdout";
+static GKO_CONST_STR     SERVER_LOG =           "";
+static GKO_CONST_STR     CLIENT_LOG =           "";
 /// file for continue interrupted job
 static GKO_CONST_STR     GKO_SNAP_FILE =        "._gk_snapshot_";
 /// for debug usage
@@ -318,6 +361,7 @@ typedef void * (*func_t)(void *, int);
 typedef struct _s_file_t
 {
     struct stat f_stat;
+    time_t mtime;
     mode_t mode;
     GKO_INT64 size; /// -1 for dir, -2 for symbol link
     char sympath[MAX_PATH_LEN];
@@ -357,7 +401,9 @@ typedef struct _s_job_t
 {
     unsigned int job_state;    /// pass job state to client
     int host_num;
+    int host_set_max_size;  /// keep track of the max host_set size
     int lock_id;
+    struct timeval dl_time; /// time used for download, server will use it to save seed time
     char uri[MAX_URI];
     char path[MAX_PATH_LEN]; ///localpath, serv part and clnt part are diff
     s_file_t * files;
@@ -446,6 +492,7 @@ typedef struct _s_async_server_arg_t
 typedef struct _s_option_t
 {
     char need_help;
+    int daemon_mode;
     char to_continue;
     char need_progress;
     int to_debug;
@@ -458,11 +505,14 @@ typedef struct _s_option_t
     int limit_up_rate;
     /// down band width limit rate
     int limit_down_rate;
+    /// read disk limit rate
+    int limit_disk_r_rate;
+    /// write disk limit rate
+    int limit_disk_w_rate;
     /// make seed speed limit rate
     int limit_mk_seed_rate;
     in_addr_t bind_ip; /// this is usually 32bit
     char logpath[MAX_PATH_LEN];
-    char listen_ip[MAX_HOST_NAME];
 } s_option_t;
 
 /// gingko global stuff
@@ -470,19 +520,13 @@ typedef struct _s_gingko_global_t
 {
     FILE * log_fp;
 
-    /// FUNC DICT
-    char (* cmd_list_p)[8];
-    ///server func list
-    func_t * func_list_p;
-
     /// options switch
     s_option_t opt;
 
     ///  the host and server
-    s_host_t the_clnt;
     s_host_t the_serv;
 
-    /// ready_to_serv flog, when the upload thread
+    /// ready_to_serv flag, when the upload thread
     volatile char ready_to_serv;
 
     /// save the NEWWed, DELEed host when server is not ready
@@ -511,8 +555,6 @@ typedef struct _s_snap_t
 int helo_serv_c(void * arg, int fd, s_host_t * server);
 /// send JOIN handler
 void * join_job_c(void *, int);
-/// send QUIT handler
-void * quit_job_c(void *, int);
 /// send GETT handler
 GKO_INT64 get_blocks_c(s_job_t * jo, s_host_t * dhost, GKO_INT64 num, GKO_INT64 count,
         u_char flag, char * buf);
@@ -528,6 +570,8 @@ int sig_watcher(void * (*worker)(void *));
 int sendall(int, const void *, int sz, int flag);
 /// send a mem to fd(usually socket)
 int sep_arg(char * inputstring, char * arg_array[], int max);
+/// exit wrapper
+void gko_quit(int ret);
 /// parse the request return the proper func handle num
 int parse_req(char *req);
 /// parse the request return the proper func handle num
@@ -536,24 +580,30 @@ struct hostent * gethostname_my(const char *host, struct hostent *hostbuf);
 int getaddr_my(const char *host, in_addr_t * addr_p);
 /// check ulimit -n
 int check_ulimit();
-///// erase job related stuff
-//int erase_job(string &uri_string);
+
 /// hash the host to the data ring
 s_host_hash_result_t * host_hash(s_job_t * jo, const s_host_t * new_host,
         s_host_hash_result_t * result, const u_char usage);
 /// send blocks to the out_fd(usually socket)
 int sendblocks(int out_fd, s_job_t * jo, GKO_INT64 start, GKO_INT64 num);
+/// send zipped blocks to the out_fd(usually socket)
+int sendblocks_zip(int out_fd, s_job_t * jo, GKO_INT64 start, GKO_INT64 num);
 /// write block to disk
 int writeblock(s_job_t * jo, const u_char * buf, s_block_t * blk);
 /// Before send data all req to server will filtered by conn_send_data
 void conn_send_data(int fd, void *str, unsigned int len);
 /// send cmd msg to host, not read response, on succ return 0
-int sendcmd(s_host_t *h, const char * cmd, int recv_sec, int send_sec);
+int sendcmd2host(const s_host_t *h, const char * cmd, const int recv_sec, const int send_sec);
 /// try best to read specificed bytes from a file to buf
 int readfileall(int fd, off_t offset, off_t count, char ** buf);
 /// try best to read specificed bytes from a file to buf
 int readall(int socket, void* data, int data_len, int flags);
-
+/// try best to read cmd, the first 2 bytes are cmd length
+int readcmd(int fd, void* data, int max_len, int timeout);
+/// read zipped data form fd and unzip it
+int readall_unzip(int fd, char * data, char * buf_zip, int data_len, int timeout);
+/// update host_set_max_size
+void update_host_max(s_job_t * job);
 
 /************** INLINE FUNC DECL **************/
 /**
@@ -561,7 +611,7 @@ int readall(int socket, void* data, int data_len, int flags);
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 static inline GKO_INT64 array_sum(GKO_INT64 * a, GKO_INT64 count)
@@ -579,7 +629,7 @@ static inline GKO_INT64 array_sum(GKO_INT64 * a, GKO_INT64 count)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 static inline GKO_INT64 next_f(s_job_t * jo, GKO_INT64 file)
@@ -597,7 +647,7 @@ static inline GKO_INT64 next_f(s_job_t * jo, GKO_INT64 file)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 static inline GKO_INT64 next_b(s_job_t * jo, GKO_INT64 block)
@@ -611,7 +661,7 @@ static inline GKO_INT64 next_b(s_job_t * jo, GKO_INT64 block)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 static inline GKO_INT64 prev_b(s_job_t * jo, GKO_INT64 block)
@@ -624,7 +674,7 @@ static inline GKO_INT64 prev_b(s_job_t * jo, GKO_INT64 block)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 static inline GKO_UINT64 host_distance(const s_host_t * h1, const s_host_t * h2)
@@ -636,11 +686,30 @@ static inline GKO_UINT64 host_distance(const s_host_t * h1, const s_host_t * h2)
 }
 
 /**
+ * @brief get thread id, Darwin has no thread idp
+ *
+ * @see
+ * @note
+ * @author auxten  <auxtenwpc@gmail.com>
+ * @date 2011-8-1
+ **/
+static inline pid_t gko_gettid(void)
+{
+#if defined (__APPLE__)
+    return getpid();
+#elif defined (__FreeBSD__)
+    return getpid();
+#elif defined(__linux__)
+    return syscall(SYS_gettid);
+#endif
+}
+
+/**
  * @brief sendfile wrapper
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 static inline int gsendfile(int out_fd, int in_fd, off_t *offset,
@@ -667,6 +736,22 @@ static inline int gsendfile(int out_fd, int in_fd, off_t *offset,
     }
     return (ret);
 #endif
+}
+
+/**
+ * @brief fill the cmd header before send it out, including version, cmd length
+ *
+ * @see
+ * @note
+ * @author auxten  <auxtenwpc@gmail.com>
+ * @date Jan 10, 2012
+ **/
+static inline void fill_cmd_head(char * cmd, const int msg_len)
+{
+    memset(cmd, 0, CMD_PREFIX_BYTE);
+    *((unsigned short *) cmd) = PROTO_VER;
+    *((int *) (cmd + CMD_PREFIX_BYTE - sizeof(int))) =
+        (int) (msg_len - CMD_PREFIX_BYTE);
 }
 
 #endif /** GINGKO_H_ **/

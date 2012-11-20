@@ -17,7 +17,7 @@
  * @see
  * @note
  *     if hval is not 0, use it as the init hash value
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 unsigned xor_hash(const void *key, int len, unsigned hval)
@@ -78,7 +78,7 @@ unsigned xor_hash(const void *key, int len, unsigned hval)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 char digest_ok(void * buf, s_block_t * b)
@@ -91,7 +91,7 @@ char digest_ok(void * buf, s_block_t * b)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 unsigned xor_hash_block(s_job_t * jo, GKO_INT64 block_id, u_char * buf)
@@ -158,7 +158,7 @@ unsigned xor_hash_block(s_job_t * jo, GKO_INT64 block_id, u_char * buf)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 unsigned xor_hash_file(unsigned value, FILE * fd, off_t * off, size_t * count,
@@ -178,7 +178,7 @@ unsigned xor_hash_file(unsigned value, FILE * fd, off_t * off, size_t * count,
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 void * xor_hash_worker_f(void * a)
@@ -275,6 +275,11 @@ void * xor_hash_worker_f(void * a)
 
     delete [] buf;
     (jo->hash_buf)[t_idx] = NULL;
+    if (fd != (FILE *) -1)
+    {
+        fclose(fd);
+        fd = (FILE *) -1;
+    }
     gko_log(TRACE, "xor_hash_worker_f returned successfully");
     pthread_exit((void *) 0);
 }
@@ -295,7 +300,7 @@ void * xor_hash_worker_f(void * a)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int xor_hash_all(s_job_t * jo, hash_worker_thread_arg arg[])

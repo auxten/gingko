@@ -18,7 +18,7 @@
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int inplace_strip_tailing_slash(char * path)
@@ -50,7 +50,7 @@ int inplace_strip_tailing_slash(char * path)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int inplace_add_tailing_slash(char * path)
@@ -92,7 +92,7 @@ int inplace_add_tailing_slash(char * path)
  *     ^
  *     ../file          ->  3
  *        ^
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int get_base_name_index(char * out, const char * in)
@@ -131,7 +131,7 @@ int get_base_name_index(char * out, const char * in)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int merge_path(char * out, const char * dir_name, const char * base_name)
@@ -165,7 +165,7 @@ int merge_path(char * out, const char * dir_name, const char * base_name)
  *          path output:  ../output2/test/.DS_Store
  *     else
  *          path output:  ../output2/.DS_Store
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int change_to_local_path(char * path, const char * req_path,
@@ -211,7 +211,7 @@ int change_to_local_path(char * path, const char * req_path,
  * @note
  *     result is stored in abs_path
  *     return abs_path on succeed else NULL
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 GKO_STATIC_FUNC char * cwd_path_to_abs_path(char * abs_path, const char * oldpath)
@@ -251,7 +251,7 @@ GKO_STATIC_FUNC char * cwd_path_to_abs_path(char * abs_path, const char * oldpat
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 char * symlink_dest_to_abs_path(char * abs_path, const char * symlink)
@@ -308,7 +308,7 @@ char * symlink_dest_to_abs_path(char * abs_path, const char * symlink)
  *     the snap file path is stored in snap_fpath
  * @return  0 for error
  *          uri_hash for succ
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 unsigned gen_snap_fpath(char *snap_fpath, const char * localpath,
@@ -367,7 +367,7 @@ unsigned gen_snap_fpath(char *snap_fpath, const char * localpath,
  *     GKO_LOTHR =   0010;    ///symlink to other
  *     GKO_LINK =    0010;    ///for symlink test
  *     GKO_ERR =     0100;    ///error
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int path_type(const char * p)
@@ -451,7 +451,7 @@ int path_type(const char * p)
  *     if the symlink is already exist, unlink it and create a
  *     new one
  *     if the dir is already exist, leave it there
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int mk_dir_symlink_file(s_job_t * jo, char * to_continue)
@@ -554,10 +554,11 @@ int mk_dir_symlink_file(s_job_t * jo, char * to_continue)
 
 /**
  * @brief correct the file and dir mode, cause for write in we create them with mode|S_IWUSR
+ *          and take care of the setgit of dir
  *
- * @see
+ * @see http://www.gnu.org/software/coreutils/manual/html_node/Directory-Setuid-and-Setgid.html
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-10
  **/
 int correct_mode(s_job_t * jo)
@@ -566,14 +567,16 @@ int correct_mode(s_job_t * jo)
     for (GKO_INT64 i = 0; i < jo->file_count; i++)
     {
         f_p = jo->files + i;
-        if ((! (f_p->mode & S_IWUSR)) && (f_p->size == -1))
+        if ((f_p->size == -1) || (!(f_p->mode & S_IWUSR)))
         {
-            if(chmod(f_p->name, f_p->mode))
+            if (chmod(f_p->name, f_p->mode))
             {
-                gko_log(FATAL, "chmod for '%s' to 0%3o failed!!!", f_p->name, f_p->mode & 0777);
+                gko_log(FATAL, "chmod for '%s' to 0%3o failed!!!", f_p->name,
+                        f_p->mode & 0777);
                 return -1;
             }
-            gko_log(TRACE, "chmod for '%s' to 0%3o succeed", f_p->name, f_p->mode & 0777);
+            gko_log(TRACE, "chmod for '%s' to 0%3o succeed", f_p->name,
+                    f_p->mode & 0777);
         }
     }
 
@@ -584,7 +587,7 @@ int correct_mode(s_job_t * jo)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int process_path(s_job_t * jo)

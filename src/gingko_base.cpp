@@ -31,6 +31,10 @@
 #include <fcntl.h>
 #ifdef __APPLE__
 #include <sys/uio.h>
+#elif defined (__FreeBSD__)
+#include <sys/uio.h>
+#include <sys/socket.h>
+#include <sys/types.h>
 #else
 #include <sys/sendfile.h>
 #endif /** __APPLE__ **/
@@ -44,11 +48,13 @@
 #include "config.h"
 
 #include "hash/xor_hash.h"
+#include "hash/gko_zip.h"
 #include "gingko.h"
 #include "path.h"
 #include "log.h"
 #include "socket.h"
 #include "limit.h"
+#include "async_pool.h"
 
 ///mutex for gethostbyname limit
 static pthread_mutex_t g_netdb_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -62,7 +68,7 @@ extern s_gingko_global_t gko;
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 void set_sig(void(*int_handler)(int))
@@ -93,7 +99,7 @@ void set_sig(void(*int_handler)(int))
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int sig_watcher(void * (*worker)(void *))
@@ -133,7 +139,7 @@ int sig_watcher(void * (*worker)(void *))
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int sep_arg(char * inputstring, char * arg_array[], int max)
@@ -156,39 +162,11 @@ int sep_arg(char * inputstring, char * arg_array[], int max)
 }
 
 /**
- * @brief parse the request return the proper func handle num
- *
- * @see
- * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
- * @date 2011-8-1
- **/
-int parse_req(char *req)
-{
-    u_int i;
-    if (UNLIKELY(!req))
-    {
-        return CMD_COUNT - 1;
-    }
-    for (i = 0; i < CMD_COUNT - 1; i++)
-    {
-        if (gko.cmd_list_p[i][0] == req[0] &&
-            gko.cmd_list_p[i][1] == req[1] &&
-            gko.cmd_list_p[i][2] == req[2] &&
-            gko.cmd_list_p[i][3] == req[3])
-        {
-            break;
-        }
-    }
-    return i;
-}
-
-/**
  * @brief thread safe gethostbyname
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 struct hostent * gethostname_my(const char *host, struct hostent * ret)
@@ -222,7 +200,7 @@ struct hostent * gethostname_my(const char *host, struct hostent * ret)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-25
  **/
 int getaddr_my(const char *host, in_addr_t * addr_p)
@@ -257,7 +235,7 @@ int getaddr_my(const char *host, in_addr_t * addr_p)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-24
  **/
 int check_ulimit()
@@ -268,10 +246,16 @@ int check_ulimit()
         gko_log(FATAL, "getrlimit(RLIMIT_NOFILE, &lmt) error");
         return -1;
     }
-    if(lmt.rlim_max < MIN_NOFILE)
+    if (lmt.rlim_max < MIN_NOFILE)
     {
-        fprintf(stderr, "The max open files limit is %lld, you had better make it >= %lld\n", lmt.rlim_max, MIN_NOFILE);
-        gko_log(FATAL, "The max open files limit is %lld, you had better make it >= %lld\n", lmt.rlim_max, MIN_NOFILE);
+        fprintf(
+                stderr,
+                "The max open files limit is %lld, you had better make it >= %lld\n",
+                lmt.rlim_max, MIN_NOFILE);
+        gko_log(
+                FATAL,
+                "The max open files limit is %lld, you had better make it >= %lld\n",
+                lmt.rlim_max, MIN_NOFILE);
         return -1;
     }
     return 0;
@@ -282,7 +266,7 @@ int check_ulimit()
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 void ev_fn_gsend(int fd, short ev, void *arg)
@@ -319,55 +303,7 @@ void ev_fn_gsend(int fd, short ev, void *arg)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
- * @date 2011-8-1
- **/
-//int sendall(int fd, const void * void_p, int sz, int flag)
-//{
-//    s_write_arg_t arg;
-//    if (!sz)
-//    {
-//        return 0;
-//    }
-//    if (!void_p)
-//    {
-//        gko_log(WARNING, "Null Pointer");
-//        return -1;
-//    }
-//    arg.sent = 0;
-//    arg.send_counter = 0;
-//    arg.sz = sz;
-//    arg.p = (char *) void_p;
-//    arg.flag = flag;
-//    arg.retry = 0;
-//    /// FIXME event_init() and event_base_free() waste open pipe
-//    arg.ev_base = event_init();
-//
-//    event_set(&(arg.ev_write), fd, EV_WRITE | EV_PERSIST, ev_fn_gsend,
-//            (void *) (&arg));
-//    event_base_set(arg.ev_base, &(arg.ev_write));
-//    if (-1 == event_add(&(arg.ev_write), 0))
-//    {
-//        gko_log(WARNING, "Cannot handle write data event");
-//    }
-//    event_base_loop(arg.ev_base, 0);
-//    event_del(&(arg.ev_write));
-//    event_base_free(arg.ev_base);
-//    ///gko_log(NOTICE, "sent: %d", arg.sent);
-//    if (arg.sent < 0)
-//    {
-//        gko_log(WARNING, "ev_fn_write error");
-//        return -1;
-//    }
-//    return 0;
-//}
-
-/**
- * @brief send a mem to fd(usually socket)
- *
- * @see
- * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int sendall(int fd, const void * void_p, int sz, int timeout)
@@ -461,7 +397,7 @@ int sendall(int fd, const void * void_p, int sz, int timeout)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 void ev_fn_gsendfile(int fd, short ev, void *arg)
@@ -475,7 +411,7 @@ void ev_fn_gsendfile(int fd, short ev, void *arg)
     if (((a->sent = gsendfile(fd, a->in_fd, &tmp_off, &tmp_counter)) >= 0))
     {
         bw_up_limit(a->sent, gko.opt.limit_up_rate);
-        gko_log(DEBUG, "gsentfile: %d", a->sent);
+//        gko_log(DEBUG, "gsentfile: %d", a->sent);
         if ((a->send_counter += a->sent) == a->count)
         {
             event_del(&(a->ev_write));
@@ -498,7 +434,7 @@ void ev_fn_gsendfile(int fd, short ev, void *arg)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int sendfileall(int out_fd, int in_fd, off_t *offset, GKO_UINT64 *count)
@@ -540,7 +476,7 @@ int sendfileall(int out_fd, int in_fd, off_t *offset, GKO_UINT64 *count)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int sendfileall2(int out_fd, int in_fd, off_t *offset, GKO_UINT64 *count)
@@ -577,19 +513,48 @@ int sendfileall2(int out_fd, int in_fd, off_t *offset, GKO_UINT64 *count)
     return 0;
 }
 
-
 /**
- * @brief try best to read specificed bytes from a file to buf
- * @brief so the file should not be very large...
+ * @brief zip the buf, fill cmd header and send it out
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
+ * @date Jan 12, 2012
+ **/
+int zip_sendall(int out_fd, char * buf_orig, char * buf_zip, int orig_len)
+{
+
+    int zip_len = gko_zip(buf_orig, buf_zip+CMD_PREFIX_BYTE, orig_len);
+    if (zip_len <= 0)
+    {
+        gko_log(WARNING, FLF("compress error"));
+        return -1;
+    }
+    gko_log(DEBUG, "zip len %d", zip_len);
+
+    fill_cmd_head(buf_zip, zip_len + CMD_PREFIX_BYTE);
+    if (sendall(out_fd, buf_zip, zip_len + CMD_PREFIX_BYTE, SNDBLK_TIMEOUT) < 0)
+    {
+        gko_log(WARNING, FLF("sendall error"));
+        return -2;
+    }
+    bw_up_limit(zip_len + CMD_PREFIX_BYTE, gko.opt.limit_up_rate);
+
+    return zip_len + CMD_PREFIX_BYTE;
+}
+
+/**
+ * @brief try best to read specificed bytes from a file to buf
+ * @brief so the count should not be very large...
+ *
+ * @see
+ * @note
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int readfileall(int fd, off_t offset, off_t count, char ** buf)
 {
-    int res;
+    int res = 0;
     off_t read_counter = 0;
     if (!count)
     {
@@ -609,15 +574,48 @@ int readfileall(int fd, off_t offset, off_t count, char ** buf)
     {
         if (errno != EAGAIN && errno != EWOULDBLOCK)
         {
-            ///#define EAGAIN      35      /** Resource temporarily unavailable **/
-            ///#define EWOULDBLOCK EAGAIN      /** Operation would block **/
-            ///#define EINPROGRESS 36      /** Operation now in progress **/
-            ///#define EALREADY    37      /** Operation already in progress **/
             gko_log(FATAL, "File read error");
             delete [] (*buf);
             return -1;
         }
     }
+    return 0;
+}
+
+
+/**
+ * @brief try best to read specificed bytes from a file to buf
+ * @brief so the count should not be very large...
+ *
+ * @see
+ * @note
+ * @author auxten  <auxtenwpc@gmail.com>
+ * @date 2011-8-1
+ **/
+int readfileall_append(int fd, off_t offset, off_t count, char * buf)
+{
+    int res = 0;
+    off_t read_counter = 0;
+    if (!count)
+    {
+        return 0;
+    }
+
+    while (read_counter < count && (res = pread(fd, buf + read_counter,
+            count - read_counter, offset + read_counter)) > 0)
+    {
+        gko_log(DEBUG, "readfileall_append res: %d",res);
+        read_counter += res;
+    }
+    if (res < 0)
+    {
+        if (errno != EAGAIN && errno != EWOULDBLOCK)
+        {
+            gko_log(FATAL, "File read error");
+            return -1;
+        }
+    }
+    disk_r_limit(read_counter, gko.opt.limit_disk_r_rate);
     return 0;
 }
 
@@ -644,60 +642,7 @@ int readfileall(int fd, off_t offset, off_t count, char ** buf)
  * returns: bytes read or error (<0)
  * can return < data_len if EOF
  *
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
- * @date 2011-8-1
- **/
-//int readall(int socket, void* data, int data_len, int flags)
-//{
-//    int b_read = 0;
-//    int n;
-//    int timer = RCV_TIMEOUT * 1000000;/// useconds
-//    while (b_read < data_len)
-//    {
-//        n = recv(socket, (char*) data + b_read, data_len - b_read, flags);
-//        if (UNLIKELY((n < 0 && !ERR_RW_RETRIABLE(errno)) || !n))
-//        {
-//            gko_log(WARNING, "readall error");
-//            return -1;
-//        }
-//        else
-//        {
-//            b_read += (n < 0 ? 0 : n);
-//            usleep(READ_INTERVAL);
-//            timer -= READ_INTERVAL;
-//            if (timer <= 0)
-//            {
-//                gko_log(WARNING, "readall timeout");
-//                return -1;
-//            }
-//        }
-//    }
-//    return b_read;
-//}
-
-/**
- * @brief read all from a socket by best effort
- *
- * @see
- * @note
- * receive all the data or returns error (handles EINTR etc.)
- * params: socket
- *         data     - buffer for the results
- *         data_len -
- *         flags    - recv flags for the first recv (see recv(2)), only
- *                    0, MSG_WAITALL and MSG_DONTWAIT make sense
- * if flags is set to MSG_DONWAIT (or to 0 and the socket fd is non-blocking),
- * and if no data is queued on the fd, recv_all will not wait (it will
- * return error and set errno to EAGAIN/EWOULDBLOCK). However if even 1 byte
- *  is queued, the call will block until the whole data_len was read or an
- *  error or eof occured ("semi-nonblocking" behaviour,  some tcp code
- *   counts on it).
- * if flags is set to MSG_WAITALL it will block even if no byte is available.
- *
- * returns: bytes read or error (<0)
- * can return < data_len if EOF
- *
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int readall(int fd, void* data, int data_len, int timeout)
@@ -778,9 +723,88 @@ int readall(int fd, void* data, int data_len, int timeout)
             }
 
         }
-    }
+    }//while
 
     return b_read;
+}
+
+/**
+ * @brief read cmd, first 2 bytes are the length
+ *
+ * @see
+ * @note
+ *
+ * @author auxten  <auxtenwpc@gmail.com>
+ * @date 2011-8-1
+ **/
+int readcmd(int fd, void* data, int max_len, int timeout)
+{
+    unsigned short proto_ver;
+    int msg_len;
+    int ret;
+    char nouse_buf[CMD_PREFIX_BYTE];
+
+    /// read the proto ver
+    if (readall(fd, &proto_ver, sizeof(proto_ver), timeout) < 0)
+    {
+        gko_log(WARNING, "read proto_ver failed");
+        return -1;
+    }
+    if (proto_ver != PROTO_VER)
+    {
+        gko_log(WARNING, "unsupported proto_ver");
+        return -1;
+    }
+
+    /// read the nouse_buf
+    if (readall(fd, nouse_buf,
+            CMD_PREFIX_BYTE - sizeof(proto_ver) - sizeof(msg_len), timeout) < 0)
+    {
+        gko_log(WARNING, "read nouse_buf failed");
+        return -1;
+    }
+
+    /// read the msg_len
+    if (readall(fd, &msg_len, sizeof(msg_len), timeout) < 0)
+    {
+        gko_log(WARNING, "read msg_len failed");
+        return -1;
+    }
+    if (msg_len > max_len)
+    {
+        gko_log(WARNING, "a too long msg: %u", msg_len);
+        return -1;
+    }
+    ret = readall(fd, data, msg_len, timeout);
+    if (ret < 0)
+    {
+        gko_log(WARNING, "read cmd failed");
+        return -1;
+    }
+    return ret;
+}
+
+/**
+ * @brief read zipped data form fd and unzip it
+ *
+ * @see
+ * @note
+ * @author auxten  <auxtenwpc@gmail.com>
+ * @date Jan 12, 2012
+ **/
+int readall_unzip(int fd, char * data, char * buf_zip, int data_len, int timeout)
+{
+    if (readcmd(fd, buf_zip, data_len + data_len * 6 / 1024 + UNZIP_EXTRA, timeout) < 0)
+    {
+        gko_log(NOTICE, FLF("readall_unzip error"));
+        return -1;
+    }
+    if (gko_unzip(buf_zip, data, data_len) < 0)
+    {
+        gko_log(WARNING, FLF("gko_unzip error"));
+        return -2;
+    }
+    return data_len;
 }
 
 
@@ -789,7 +813,7 @@ int readall(int fd, void* data, int data_len, int timeout)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int sendblocks(int out_fd, s_job_t * jo, GKO_INT64 start, GKO_INT64 num)
@@ -888,11 +912,149 @@ int sendblocks(int out_fd, s_job_t * jo, GKO_INT64 start, GKO_INT64 num)
 }
 
 /**
+ * @brief send zipped blocks to the out_fd(usually socket)
+ *
+ * @see
+ * @note
+ * @author auxten  <auxtenwpc@gmail.com>
+ * @date 2011-8-1
+ **/
+int sendblocks_zip(int out_fd, s_job_t * jo, GKO_INT64 start, GKO_INT64 num)
+{
+    if (num <= 0)
+    {
+        return 0;
+    }
+    GKO_INT64 sent = 0;
+    GKO_INT64 b = start;
+    GKO_INT64 file_size;
+    GKO_UINT64 file_left;
+    int fd = -1;
+    int ret = 0;
+    char * buf_orig = new char [BLOCK_SIZE + 1];
+    char * buf_zip = new char [BLOCK_SIZE + BLOCK_SIZE * 6 / 1024 + CMD_PREFIX_BYTE];
+
+    /**
+     * if include the last block, the total size
+     *    may be smaller than BLOCK_SIZE * num
+     **/
+    GKO_INT64 total = BLOCK_SIZE * (num - 1)
+            + (start + num >= jo->block_count ? (jo->blocks + jo->block_count
+                    - 1)->size : BLOCK_SIZE);
+    GKO_INT64 f = (jo->blocks + start)->start_f;
+    GKO_UINT64 block_left = (jo->blocks + b)->size;
+    off_t offset = (jo->blocks + start)->start_off;
+    while (total > 0)
+    {
+        if (fd == -1)
+        {
+            fd = open((jo->files + f)->name, READ_OPEN_FLAG);
+        }
+        if (fd < 0)
+        {
+            gko_log(WARNING, FLF("sendblocks_zip open error"));
+            ret = -2;
+            goto sendblocks_zip_exit;
+        }
+        file_size = (jo->files + f)->size;
+        file_left = file_size - offset;
+
+        if (block_left > file_left)
+        {
+            if (readfileall_append(fd, offset, file_left, buf_orig + (jo->blocks + b)->size - block_left) != 0)
+            ///if (sendfileall(out_fd, fd, &offset, &file_left) != 0)
+            {
+                gko_log(DEBUG, FLF("readfileall error"));
+                close(fd);
+                fd = -1;
+                ret = -1;
+                goto sendblocks_zip_exit;
+            }
+            close(fd);
+            fd = -1;
+            block_left -= file_left;
+            total -= file_left;
+            sent += file_left;
+            offset = 0;
+            f = next_f(jo, f);
+        }
+        else if (block_left == file_left)
+        {
+            if (readfileall_append(fd, offset, file_left, buf_orig + (jo->blocks + b)->size - block_left) != 0)
+            ///if (sendfileall(out_fd, fd, &offset, &file_left) != 0)
+            {
+                gko_log(DEBUG, FLF("readfileall error"));
+                close(fd);
+                fd = -1;
+                ret = -1;
+                goto sendblocks_zip_exit;
+            }
+
+            if (zip_sendall(out_fd, buf_orig, buf_zip, (jo->blocks + b)->size) < 0)
+            {
+                gko_log(WARNING, FLF("sendall error"));
+                close(fd);
+                fd = -1;
+                ret = -1;
+                goto sendblocks_zip_exit;
+            }
+
+            close(fd);
+            fd = -1;
+            offset = 0;
+            total -= file_left;
+            sent += file_left;
+            f = next_f(jo, f);
+            b = next_b(jo, b);
+            block_left = (jo->blocks + b)->size;
+        }
+        else
+        { /**block_left < file_left**/
+            if (readfileall_append(fd, offset, block_left, buf_orig + (jo->blocks + b)->size - block_left) != 0)
+            ///if (sendfileall(out_fd, fd, &offset, &block_left) != 0)
+            {
+                gko_log(DEBUG, FLF("readfileall error"));
+                close(fd);
+                fd = -1;
+                ret = -1;
+                goto sendblocks_zip_exit;
+            }
+
+            if (zip_sendall(out_fd, buf_orig, buf_zip, (jo->blocks + b)->size) < 0)
+            {
+                gko_log(WARNING, FLF("sendall error"));
+                close(fd);
+                fd = -1;
+                ret = -1;
+                goto sendblocks_zip_exit;
+            }
+
+            b = next_b(jo, b);
+            total -= block_left;
+            offset += block_left;
+            sent += block_left;
+            block_left = (jo->blocks + b)->size;
+        }
+        if (fd != -1)
+        {
+            close(fd);
+            fd = -1;
+        }
+    }
+
+sendblocks_zip_exit:
+    delete [] buf_orig;
+    delete [] buf_zip;
+    return ret;
+}
+
+
+/**
  * @brief write block to disk
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
 int writeblock(s_job_t * jo, const u_char * buf, s_block_t * blk)
@@ -921,6 +1083,7 @@ int writeblock(s_job_t * jo, const u_char * buf, s_block_t * blk)
             gko_log(WARNING, "write file error");
             return -1;
         }
+        disk_w_limit(wrote, gko.opt.limit_disk_w_rate);
         total -= wrote;
         counter += wrote;
         fsync(fd);
@@ -936,21 +1099,49 @@ int writeblock(s_job_t * jo, const u_char * buf, s_block_t * blk)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-int sendcmd(s_host_t *h, const char * cmd, int recv_sec, int send_sec)
+int sendcmd2host(const s_host_t *h, const char * cmd, const int recv_sec, const int send_sec)
 {
     int sock;
     int result;
+    int msg_len;
+    char new_cmd[MSG_LEN] = {'\0'};
 
     sock = connect_host(h, recv_sec, send_sec);
     if (sock < 0)
     {
-        gko_log(DEBUG, "sendcmd() connect_host error");
+        gko_log(DEBUG, "sendcmd2host() connect_host error");
         return -1;
     }
-    result = sendall(sock, cmd, strlen(cmd), send_sec);
+    msg_len = snprintf(new_cmd, sizeof(new_cmd), "%s%s", PREFIX_CMD, cmd);
+    if (msg_len <= CMD_PREFIX_BYTE)
+    {
+        gko_log(WARNING, FLF("snprintf error"));
+        close_socket(sock);
+        return -1;
+    }
+    else
+    {
+        fill_cmd_head(new_cmd, msg_len);
+    }
+    result = sendall(sock, new_cmd, msg_len, send_sec);
+
     close_socket(sock);
     return result;
 }
+
+/**
+ * quit func
+ */
+void gko_quit(int ret)
+{
+    lock_log();
+    //gko_pool::getInstance()->gko_loopexit(0);
+    usleep(100000);
+    _exit(ret);
+}
+
+
+

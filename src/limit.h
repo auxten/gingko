@@ -12,6 +12,10 @@
 void bw_down_limit(int amount, int limit_rate);
 /// limit upload rate
 void bw_up_limit(int amount, int limit_rate);
+/// limit disk write rate
+void disk_w_limit(int amount, int limit_rate);
+/// limit disk read rate
+void disk_r_limit(int amount, int limit_rate);
 /// limit make seed rate
 void mk_seed_limit(int amount, int limit_rate);
 

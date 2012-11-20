@@ -11,20 +11,15 @@
 #include "async_pool.h"
 #include "log.h"
 
-static int g_curr_thread = 0;
-static struct thread_worker ** g_worker_list;
-
-extern s_gingko_global_t gko;
-
 /**
  * @brief create new thread worker
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-GKO_STATIC_FUNC int thread_worker_new(int id)
+int gko_pool::thread_worker_new(int id)
 {
     int ret;
 
@@ -73,10 +68,10 @@ GKO_STATIC_FUNC int thread_worker_new(int id)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-void * thread_worker_init(void *arg)
+void * gko_pool::thread_worker_init(void *arg)
 {
     struct thread_worker *worker = (struct thread_worker *) arg;
     event_set(&worker->ev_notify, worker->notify_recv_fd, EV_READ | EV_PERSIST,
@@ -93,15 +88,15 @@ void * thread_worker_init(void *arg)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-void thread_worker_process(int fd, short ev, void *arg)
+void gko_pool::thread_worker_process(int fd, short ev, void *arg)
 {
     struct thread_worker *worker = (struct thread_worker *) arg;
     int c_id;
     read(fd, &c_id, sizeof(int));
-    struct conn_client *client = conn_client_list_get(c_id);
+    struct conn_client *client = gko_pool::getInstance()->conn_client_list_get(c_id);
 
     if (client->client_fd)
     {
@@ -126,17 +121,17 @@ void thread_worker_process(int fd, short ev, void *arg)
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-GKO_STATIC_FUNC int thread_list_find_next()
+int gko_pool::thread_list_find_next()
 {
     int i;
     int tmp;
 
-    for (i = 0; i < gko.opt.worker_thread; i++)
+    for (i = 0; i < option->worker_thread; i++)
     {
-        tmp = (i + g_curr_thread + 1) % gko.opt.worker_thread;
+        tmp = (i + g_curr_thread + 1) % option->worker_thread;
         if (*(g_worker_list + tmp) && (*(g_worker_list + tmp))->tid)
         {
             g_curr_thread = tmp;
@@ -152,20 +147,20 @@ GKO_STATIC_FUNC int thread_list_find_next()
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-int thread_init()
+int gko_pool::thread_init()
 {
     int i;
-    g_worker_list = new struct thread_worker *[gko.opt.worker_thread];
+    g_worker_list = new struct thread_worker *[option->worker_thread];
     if (! g_worker_list)
     {
-        gko_log(FATAL, "new new struct thread_worker *[gko.opt.worker_thread] failed");
+        gko_log(FATAL, "new new struct thread_worker *[option->worker_thread] failed");
         return -1;
     }
-    memset(g_worker_list, 0, sizeof(struct thread_worker *) * gko.opt.worker_thread);
-    for (i = 0; i < gko.opt.worker_thread; i++)
+    memset(g_worker_list, 0, sizeof(struct thread_worker *) * option->worker_thread);
+    for (i = 0; i < option->worker_thread; i++)
     {
         if(thread_worker_new(i) != 0)
         {
@@ -178,14 +173,43 @@ int thread_init()
 }
 
 /**
+ * @brief parse the request return the proper func handle num
+ *
+ * @see
+ * @note
+ * @author auxten  <auxtenwpc@gmail.com>
+ * @date 2011-8-1
+ **/
+int gko_pool::parse_req(char *req)
+{
+    int i;
+    if (UNLIKELY(!req))
+    {
+        return cmd_count - 1;
+    }
+    for (i = 0; i < cmd_count - 1; i++)
+    {
+        if (cmd_list_p[i][0] == req[0] && //todo use int
+            cmd_list_p[i][1] == req[1] &&
+            cmd_list_p[i][2] == req[2] &&
+            cmd_list_p[i][3] == req[3])
+        {
+            break;
+        }
+    }
+    return i;
+}
+
+
+/**
  * @brief Dispatch to worker
  *
  * @see
  * @note
- * @author auxten <wangpengcheng01@baidu.com> <auxtenwpc@gmail.com>
+ * @author auxten  <auxtenwpc@gmail.com>
  * @date 2011-8-1
  **/
-void thread_worker_dispatch(int c_id)
+void gko_pool::thread_worker_dispatch(int c_id)
 {
     int worker_id;
     int res;
@@ -202,3 +226,15 @@ void thread_worker_dispatch(int c_id)
         gko_log(WARNING, "Pipe write error");
     }
 }
+
+int gko_pool::gko_loopexit(int timeout)
+{
+    struct timeval timev;
+
+    timev.tv_sec = timeout;
+    timev.tv_usec = 0;
+    event_base_loopexit(g_ev_base, (timeout ? &timev : NULL));
+    return 0;
+}
+
+
