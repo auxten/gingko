@@ -6,7 +6,7 @@
  *  Copyright 2011 Baidu. All rights reserved.
  *
  **/
-#define GINGKO_SERV /// for debug
+//#define GINGKO_SERV /// for debug
 #ifndef GINGKO_COMMON_H_
 #define GINGKO_COMMON_H_
 
