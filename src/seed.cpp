@@ -94,6 +94,8 @@ GKO_STATIC_FUNC int init_struct(const char *name, const struct stat *status, int
 
 //        memcpy(&((p_dir->files + p_dir->init_s_file_t_iter)->f_stat), status,
 //                sizeof(struct stat));
+        memcpy(&((p_dir->files + p_dir->init_s_file_t_iter)->mtime), status->st_mtime,
+                sizeof(time_t));
         (p_dir->files + p_dir->init_s_file_t_iter)->mode = status->st_mode;
         memcpy((p_dir->files + p_dir->init_s_file_t_iter)->name, name,
                 strlen(name) + 1);

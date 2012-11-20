@@ -360,7 +360,7 @@ typedef void * (*func_t)(void *, int);
 /// file structure
 typedef struct _s_file_t
 {
-    struct stat f_stat;
+//    struct stat f_stat;
     time_t mtime;
     mode_t mode;
     GKO_INT64 size; /// -1 for dir, -2 for symbol link

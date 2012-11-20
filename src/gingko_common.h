@@ -338,7 +338,7 @@ GKO_STATIC_FUNC void * join_job_s(void * uri, int fd)
             is_file_modified = 1;
             break;
         }
-        if (file_stat.st_mtime > (jo->files + i)->f_stat.st_mtime)
+        if (file_stat.st_mtime > (jo->files + i)->mtime)
         {
             gko_log(WARNING, "file %s is newer than seed",
                     (jo->files + i)->name);

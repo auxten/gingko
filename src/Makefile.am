@@ -5,7 +5,7 @@ INCLUDES = -I$(srcdir)/src\
     -I$(srcdir)/../lib/libev/include 
 #    -I$(srcdir)/../../../../../../third-64/libev/include 
 #    -I$(srcdir)/../../../../../../../third-64/libev/include 
-export INCLUDES
+#export INCLUDES
 
 noinst_PROGRAMS=gingko_serv gingko_clnt
 

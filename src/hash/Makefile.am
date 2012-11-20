@@ -1,12 +1,9 @@
 SUBDIRS = .
 INCLUDES = -I$(srcdir)/src \
-    -I$(srcdir)/../../../../../third-64/gtest/include \
-    -I$(srcdir)/../../../../../../third-64/gtest/include \
-    -I$(srcdir)/../../../../../../../third-64/gtest/include \
     -I$(srcdir)/../../lib/libev/include 
 #    -I$(srcdir)/../../../../../../third-64/libev/include 
 #    -I$(srcdir)/../../../../../../../third-64/libev/include 
-export INCLUDES
+#export INCLUDES
 
 noinst_LIBRARIES=libxor_hash.a libmd5.a libgko_zip.a
 
