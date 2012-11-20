@@ -21,7 +21,7 @@ usage see --help
 BUILD:
     make
 
-NOTE：
+NOTE:
     For reusing some code between clnt and serv, I write some funcs in gingko_common.h
 with some MACRO, I know this is ugly, but the bins compiled out work well...so, let it
 be.
