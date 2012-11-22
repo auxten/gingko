@@ -82,7 +82,7 @@ static const short      PROTO_VER   =           0;
 /// root uid
 static const uid_t      ROOT =                  0;
 /// block size in bytes
-static const int        BLOCK_SIZE =            (2 * 1024 * 1024);
+static const int        BLOCK_SIZE =            (16 * 1024);
 /// uncompress extra bytes
 static const int        UNZIP_EXTRA =           32;// 8 is enough
 /// req at max MAX_REQ_SERV_BLOCKS from serv

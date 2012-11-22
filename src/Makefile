@@ -159,13 +159,13 @@ distuninstallcheck_listfiles = find . -type f -print
 am__distuninstallcheck_listfiles = $(distuninstallcheck_listfiles) \
   | sed 's|^\./|$(prefix)/|' | grep -v '$(infodir)/dir$$'
 distcleancheck_listfiles = find . -type f -print
-ACLOCAL = ${SHELL} /usr/home/wangpengcheng/gingko/src/missing --run aclocal-1.12
+ACLOCAL = ${SHELL} /Users/auxten/Codes/gingko.git/gingko/src/missing --run aclocal-1.12
 AMTAR = $${TAR-tar}
 AM_CXXFLAGS = -ggdb -Wall -O0
-AUTOCONF = ${SHELL} /usr/home/wangpengcheng/gingko/src/missing --run autoconf
-AUTOHEADER = ${SHELL} /usr/home/wangpengcheng/gingko/src/missing --run autoheader
-AUTOMAKE = ${SHELL} /usr/home/wangpengcheng/gingko/src/missing --run automake-1.12
-AWK = nawk
+AUTOCONF = ${SHELL} /Users/auxten/Codes/gingko.git/gingko/src/missing --run autoconf
+AUTOHEADER = ${SHELL} /Users/auxten/Codes/gingko.git/gingko/src/missing --run autoheader
+AUTOMAKE = ${SHELL} /Users/auxten/Codes/gingko.git/gingko/src/missing --run automake-1.12
+AWK = awk
 CC = gcc
 CCDEPMODE = depmode=gcc3
 CFLAGS = -g -O2
@@ -177,8 +177,8 @@ CXXFLAGS = -ggdb
 CYGPATH_W = echo
 DEFS = -D_GNU_SOURCE -ggdb -funsigned-char
 DEPDIR = .deps
-ECHO_C = 
-ECHO_N = -n
+ECHO_C = \c
+ECHO_N = 
 ECHO_T = 
 EGREP = /usr/bin/grep -E
 EXEEXT = 
@@ -192,7 +192,7 @@ LDFLAGS =
 LIBOBJS = 
 LIBS = 
 LTLIBOBJS = 
-MAKEINFO = ${SHELL} /usr/home/wangpengcheng/gingko/src/missing --run makeinfo
+MAKEINFO = ${SHELL} /Users/auxten/Codes/gingko.git/gingko/src/missing --run makeinfo
 MKDIR_P = ./install-sh -c -d
 OBJEXT = o
 PACKAGE = libxor_hash.a,gingko_serv,gingko_clnt,unittest
@@ -208,10 +208,10 @@ SET_MAKE =
 SHELL = /bin/sh
 STRIP = 
 VERSION = 3.14
-abs_builddir = /usr/home/wangpengcheng/gingko/src
-abs_srcdir = /usr/home/wangpengcheng/gingko/src
-abs_top_builddir = /usr/home/wangpengcheng/gingko/src
-abs_top_srcdir = /usr/home/wangpengcheng/gingko/src
+abs_builddir = /Users/auxten/Codes/gingko.git/gingko/src
+abs_srcdir = /Users/auxten/Codes/gingko.git/gingko/src
+abs_top_builddir = /Users/auxten/Codes/gingko.git/gingko/src
+abs_top_srcdir = /Users/auxten/Codes/gingko.git/gingko/src
 ac_ct_CC = gcc
 ac_ct_CXX = g++
 am__include = include
@@ -231,7 +231,7 @@ host_alias =
 htmldir = ${docdir}
 includedir = ${prefix}/include
 infodir = ${datarootdir}/info
-install_sh = ${SHELL} /usr/home/wangpengcheng/gingko/src/install-sh
+install_sh = ${SHELL} /Users/auxten/Codes/gingko.git/gingko/src/install-sh
 libdir = ${exec_prefix}/lib
 libexecdir = ${exec_prefix}/libexec
 localedir = ${datarootdir}/locale
@@ -286,7 +286,7 @@ gingko_serv_LDADD = $(srcdir)/../lib/libev/lib/libev.a \
     $(srcdir)/hash/libxor_hash.a \
     $(srcdir)/hash/libgko_zip.a
 
-gingko_serv_LDFLAGS = -D_GNU_SOURCE -ggdb -funsigned-char
+gingko_serv_LDFLAGS = -D_GNU_SOURCE -ggdb -funsigned-char -lpthread
 gingko_clnt_SOURCES = async_threads.cpp async_conn.cpp gingko_clnt.cpp clnt_main.cpp\
     gingko_base.cpp path.cpp log.cpp option.cpp socket.cpp limit.cpp \
     route.cpp snap.cpp progress.cpp
@@ -295,7 +295,7 @@ gingko_clnt_LDADD = $(srcdir)/../lib/libev/lib/libev.a \
     $(srcdir)/hash/libxor_hash.a \
     $(srcdir)/hash/libgko_zip.a
 
-gingko_clnt_LDFLAGS = -D_GNU_SOURCE -ggdb -funsigned-char
+gingko_clnt_LDFLAGS = -D_GNU_SOURCE -ggdb -funsigned-char -lpthread
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-recursive
 
@@ -843,9 +843,6 @@ uninstall-am:
 	mostlyclean-generic pdf pdf-am ps ps-am tags tags-recursive \
 	uninstall uninstall-am
 
-#    -I$(srcdir)/../../../../../../third-64/libev/include 
-#    -I$(srcdir)/../../../../../../../third-64/libev/include 
-#export INCLUDES
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.
