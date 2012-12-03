@@ -8,11 +8,12 @@ conf/
 deploy
 src/p2p.sh
 src/p2pcheck.sh
-src/configure
+configure
 svn-commit.*
 .deps/
 clnt_unittest
 serv_unittest
+config.h.in
 config.h
 config.log
 config.status
