@@ -1,3 +1,4 @@
+depcomp
 Makefile.in
 COPYING
 aclocal.m4
