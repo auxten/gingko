@@ -3,6 +3,7 @@ conf/
 deploy
 src/p2p.sh
 src/p2pcheck.sh
+src/configure
 svn-commit.*
 .deps/
 clnt_unittest
