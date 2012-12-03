@@ -19,14 +19,22 @@ usage see --help
 #define Rolling_checksum_algorithm http://samba.anu.edu.au/rsync/tech_report/node3.html
 
 BUILD:
-    make
+------
+
+1. cd src && ./autogen.sh && cd .. # generate configure files  
+2. make
+
 
 NOTE:
-    For reusing some code between clnt and serv, I write some funcs in gingko_common.h
+-------
+
+For reusing some code between clnt and serv, I write some funcs in gingko_common.h
 with some MACRO, I know this is ugly, but the bins compiled out work well...so, let it
 be.
 
+
 DEPS:
+------
     libevent
     gtest (when ./configure --enable-unittest)
 
