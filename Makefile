@@ -1,6 +1,9 @@
 .PHONY: all makelib compile rm_config clean move check
-all: makelib compile #move rm_config
-	
+all: check_configure makelib compile #move rm_config
+
+check_configure:
+	if [! -x ./src/configure ]; then ( cd ./src && ./autogen.sh ); fi
+
 makelib:
 	cd lib && bash -x patch_build.sh && cd ..
 
