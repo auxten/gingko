@@ -1,3 +1,5 @@
+COPYING
+aclocal.m4
 bin/
 conf/
 deploy
