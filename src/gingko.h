@@ -102,7 +102,7 @@ static const int        MAX_HOST_NAME =         255;
 /// MAXPATHLEN in linux is 4096!!!,is it too long?
 static const u_int      MAX_PATH_LEN =          1024;
 /// Lowest port number
-static const int        MIN_PORT =              1025;
+static const int        MIN_PORT =              0;
 /// Highest port number
 static const int        MAX_PORT =              65535;
 /// Maximum listen port
