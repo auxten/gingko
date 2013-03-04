@@ -150,11 +150,11 @@ static const int        MYSTACKSIZE =           (10 * 1024 * 1024);
 /// default client conn limit
 static const int        CLNT_POOL_SIZE =        20;
 /// default client thread num
-static const int        CLNT_ASYNC_THREAD_NUM = 3;
+static const int        CLNT_ASYNC_THREAD_NUM = 11;
 /// default server conn limit
 static const int        SERV_POOL_SIZE =        30000;
 /// default client thread num
-static const int        SERV_ASYNC_THREAD_NUM = 16;
+static const int        SERV_ASYNC_THREAD_NUM = 300;
 /// default xor hash thread num
 static const int        XOR_HASH_TNUM =         3;
 /// host count got from hash ring
@@ -188,15 +188,15 @@ static const int        RCVPROGRESS_TIMEOUT =   120;
 /// sleep time before free the job related mem
 static const int        ERASE_JOB_MEM_WAIT =    (5);
 ///bytes per second
-static const int        CLNT_LIMIT_UP_RATE =    (30 * 1024 * 1024);
+static const int        CLNT_LIMIT_UP_RATE =    (40 * 1024 * 1024);
 ///bytes per second
-static const int        CLNT_LIMIT_DOWN_RATE =  (20 * 1024 * 1024);
+static const int        CLNT_LIMIT_DOWN_RATE =  (40 * 1024 * 1024);
 ///  (disk read rate) / (net upload rate)
 static const int        CLNT_DISK_READ_RATIO =  2;
 ///  (disk write rate) / (net download rate)
 static const int        CLNT_DISK_WRITE_RATIO = 2;
 ///bytes per second
-static const int        SERV_LIMIT_UP_RATE =    (95 * 1024 * 1024);
+static const int        SERV_LIMIT_UP_RATE =    (110 * 1024 * 1024);
 ///  (disk read rate) / (net upload rate)
 static const int        SERV_DISK_READ_RATIO =  20;
 ///bytes per second
