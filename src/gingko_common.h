@@ -561,7 +561,7 @@ GKO_STATIC_FUNC void * dead_host_s(void * uri, int fd)
                 /**
                  * if the host_set is empty, del the g_job things
                  **/
-                erase_job(uri_string);
+//                erase_job(uri_string);
             }
             else
             {
@@ -658,7 +658,7 @@ GKO_STATIC_FUNC void * quit_job_s(void * uri, int fd)
                 /**
                  * if the host_set is empty, del the g_job things
                  **/
-                erase_job(uri_string);
+//                erase_job(uri_string);
             }
             else
             {
