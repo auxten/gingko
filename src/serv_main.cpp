@@ -269,11 +269,11 @@ GKO_STATIC_FUNC int gingko_serv_global_init(int argc, char *argv[])
         return -1;
     }
 
-    // forbid gkod  run in root
-    if (geteuid() == 0) {
-        gko_log(FATAL, "gkod should not run with root!");
-        return -1;
-    }
+//    // forbid gkod  run in root
+//    if (geteuid() == 0) {
+//        gko_log(FATAL, "gkod should not run with root!");
+//        return -1;
+//    }
 
     if (gko.opt.daemon_mode)
     {
