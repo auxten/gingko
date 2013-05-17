@@ -752,30 +752,32 @@ void * join_job_c(void * arg, int fd)
     }
 
     {
-        ///read hosts
-        host_buf = new s_host_t[g_job.host_num + 1];
-        if (!host_buf)
+        do
         {
-            gko_log(FATAL, "s_host_t buf new failed");
-            ret = (void *) -2;
-            goto JOIN_JOB_C_CLOSE_SOCK;
-        }
-        memset(host_buf, 0, sizeof(s_host_t)*(g_job.host_num + 1));
-        j = readall(sock, host_buf, g_job.host_num * sizeof(s_host_t), RCVJOB_TIMEOUT);
-        if (j < 0)
-        {
-            gko_log(FATAL, "read host list from server failed");
-            ret = (void *) -2;
-            goto JOIN_JOB_C_CLOSE_SOCK;
-        }
-        gko_log(NOTICE, "hosts have read %d of %ld", j, g_job.host_num * sizeof(s_host_t));
+            ///read hosts
+            g_job.host_set = new std::set<s_host_t> ;
+            host_buf = new s_host_t[g_job.host_num + 1];
+            if (!host_buf)
+            {
+                gko_log(FATAL, "s_host_t buf new failed");
+                ret = (void *) -2;
+                goto JOIN_JOB_C_CLOSE_SOCK;
+            }
+            memset(host_buf, 0, sizeof(s_host_t)*(g_job.host_num + 1));
+            j = readall(sock, host_buf, g_job.host_num * sizeof(s_host_t), RCVJOB_TIMEOUT);
+            if (j < 0)
+            {
+                gko_log(FATAL, "read host list from server failed");
+                break;
+            }
+            gko_log(NOTICE, "hosts have read %d of %ld", j, g_job.host_num * sizeof(s_host_t));
 
-        ///put hosts into g_job.host_set
-        g_job.host_set = new std::set<s_host_t> ;
-        pthread_mutex_lock(&g_clnt_lock);
-        (*(g_job.host_set)).insert(host_buf, host_buf + g_job.host_num);
-        update_host_max(&g_job);
-        pthread_mutex_unlock(&g_clnt_lock);
+            ///put hosts into g_job.host_set
+            pthread_mutex_lock(&g_clnt_lock);
+            (*(g_job.host_set)).insert(host_buf, host_buf + g_job.host_num);
+            update_host_max(&g_job);
+            pthread_mutex_unlock(&g_clnt_lock);
+        } while(0);
     }
 
     {
